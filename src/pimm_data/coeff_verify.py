@@ -22,6 +22,7 @@ Usage::
 from __future__ import annotations
 
 import glob
+import json
 import os
 from collections import Counter
 
@@ -67,6 +68,7 @@ def verify_corpus(data_root, dataset_name, *, split="", expect_events=None,
     # --- 3. cross-shard agreement + identity uniqueness ----------------------
     ref = None
     ident = Counter()
+    code = []
     total = 0
     for p in noisy:
         try:
@@ -81,6 +83,14 @@ def verify_corpus(data_root, dataset_name, *, split="", expect_events=None,
                     basis_digest=str(cfg.attrs.get("basis_digest", "")),
                     noise_json=str(cfg.attrs.get("noise_json", "")),
                 )
+                # Which helix built this shard. Compared separately from the
+                # fields above because absence is LEGACY, not disagreement:
+                # shards predating the field simply have none, and flagging
+                # every one of them would bury the case this exists to catch —
+                # two shards of one corpus built by different code.
+                code.append((os.path.basename(p),
+                             json.loads(str(cfg.attrs.get("provenance_json", "{}")))
+                             .get("code")))
                 n = int(cfg.attrs["n_events"])
                 total += n
                 if "ident" in f:
@@ -106,6 +116,27 @@ def verify_corpus(data_root, dataset_name, *, split="", expect_events=None,
                         f"{os.path.basename(p)}"
                         + ("  (norm_sigma must be FROZEN across a corpus — build "
                            "with --norm-sigma)" if k == "norm_sigma" else ""))
+
+    # --- 3b. code version ----------------------------------------------------
+    known = [(f, c) for f, c in code if c]
+    if known:
+        seen = {json.dumps(c, sort_keys=True) for _, c in known}
+        if len(seen) > 1:
+            probs.append(
+                f"shards were built by DIFFERENT helix versions: "
+                + "; ".join(sorted(f"{v}" for v in seen))
+                + "  (basis_digest and the geom/spectrum hashes pin the DSP's "
+                  "inputs, not its code, so this is the only field that shows it)")
+        elif any(c.get("git_dirty") for _, c in known):
+            probs.append(
+                f"corpus was built from a DIRTY working tree "
+                f"({known[0][1].get('git')}) — the recorded commit does not "
+                f"describe the code that ran")
+        if len(known) != len(code):
+            probs.append(
+                f"{len(code) - len(known)} of {len(code)} shards predate the "
+                f"provenance 'code' field (legacy); the rest record "
+                f"{known[0][1].get('git', '?')}")
 
     # --- 4. duplicate events -------------------------------------------------
     dups = [k for k, c in ident.items() if c > 1]
