@@ -22,5 +22,12 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# Data the code loads by default: the plane-geometry registry and the measured
+# noise spectrum (pimm_data.noise.DEFAULT_SERIES_SPECTRUM). Without this they are
+# missing from a built wheel — an editable install hides it because the files are
+# simply present on disk.
+[tool.setuptools.package-data]
+"pimm_data" = ["data/*.json", "data/*.npz"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
