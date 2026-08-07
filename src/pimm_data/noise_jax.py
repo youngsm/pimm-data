@@ -27,7 +27,8 @@ jax is imported lazily at call time, so importing pimm-data never pulls it in.
 
 import numpy as np
 
-from .noise import (
+from .noise import (DEFAULT_SERIES_SPECTRUM, resolve_series_spectrum,
+                    
     DEFAULT_ENC, DEFAULT_SAMPLING_RATE_HZ, DEFAULT_GROUP_SIZE,
     DEFAULT_COH_RMS_ADC, DEFAULT_COH_CORNER_FREQ_HZ, DEFAULT_COH_SLOPE,
     DEFAULT_COH_BETA, _series_spectrum_shape, _coherent_spectrum,
@@ -90,7 +91,8 @@ def _cores():
 
 
 def incoherent_noise_jax(key, n_channels, n_ticks, wire_lengths_m, *,
-                         enc=DEFAULT_ENC, series_spectrum=None,
+                         enc=DEFAULT_ENC,
+                         series_spectrum=DEFAULT_SERIES_SPECTRUM,
                          sampling_rate_hz=DEFAULT_SAMPLING_RATE_HZ):
     """Per-channel independent noise ``(n_channels, n_ticks)`` [ADC], on device.
 
@@ -135,7 +137,8 @@ def coherent_noise_jax(key, n_channels, n_ticks, *, group_size=DEFAULT_GROUP_SIZ
 
 
 def generate_noise_jax(key, shape, *, wire_lengths_m=None, incoherent=True,
-                       coherent=False, enc=DEFAULT_ENC, series_spectrum=None,
+                       coherent=False, enc=DEFAULT_ENC,
+                       series_spectrum=DEFAULT_SERIES_SPECTRUM,
                        sampling_rate_hz=DEFAULT_SAMPLING_RATE_HZ,
                        group_size=DEFAULT_GROUP_SIZE, coh_rms=DEFAULT_COH_RMS_ADC,
                        coh_corner_freq_hz=DEFAULT_COH_CORNER_FREQ_HZ,

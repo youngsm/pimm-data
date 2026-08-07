@@ -31,7 +31,7 @@ import numpy as np
 import torch
 
 from .transform import TRANSFORMS, Compose
-from .noise import (generate_noise, digitize, DEFAULT_ENC,
+from .noise import (generate_noise, digitize, DEFAULT_ENC, DEFAULT_SERIES_SPECTRUM,
                     DEFAULT_SAMPLING_RATE_HZ)
 from .utils.pdg import pdg_to_semantic, MOTIF_MAP, PID_MAP
 
@@ -688,7 +688,8 @@ class AddNoise:
     scope = 'sample'  # per-event independent; placeable pre- OR post-collate
 
     def __init__(self, incoherent=False, coherent=True, group_size=64,
-                 wire_lengths_m=None, enc=DEFAULT_ENC, series_spectrum=None,
+                 wire_lengths_m=None, enc=DEFAULT_ENC,
+                 series_spectrum=DEFAULT_SERIES_SPECTRUM,
                  sampling_rate_hz=DEFAULT_SAMPLING_RATE_HZ, coh_rms=2.5,
                  coh_corner_freq_hz=20000.0, coh_spectral_slope=1.5, beta=0.15,
                  base_seed=0, dense_key='dense', planes=None, name_key='name',

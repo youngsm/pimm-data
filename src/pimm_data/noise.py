@@ -41,6 +41,43 @@ DEFAULT_COH_SLOPE = 1.5
 DEFAULT_COH_BETA = 0.15
 DEFAULT_GROUP_SIZE = 64
 
+#: Sentinel for the MEASURED series spectrum shipped in ``data/``. It is the
+#: default because white was the wrong answer and was silently easy to get: the
+#: research pipeline called ``AddNoise(coherent=True, incoherent=True)`` without
+#: naming a spectrum, got flat noise, and trained a foundation model on it. The
+#: measured spectrum concentrates power in 10-490 kHz and has NONE above 500 kHz,
+#: so white misplaces noise across every wavelet band (see helix's
+#: MULTI_EVENT_BATCHING.md sibling note in the corpus design docs).
+#:
+#: Pass ``series_spectrum=None`` for white — still available, but now an explicit
+#: choice rather than what you get by saying nothing.
+DEFAULT_SERIES_SPECTRUM = "microboone"
+
+_SPECTRA = {"microboone": "noise_spectrum.npz"}
+_spectrum_cache = {}
+
+
+def load_series_spectrum(name=DEFAULT_SERIES_SPECTRUM):
+    """Named spectrum -> ``(freqs_hz, amps)`` from the packaged ``data/`` file."""
+    if name not in _SPECTRA:
+        raise KeyError(f"unknown series spectrum {name!r}; known: {sorted(_SPECTRA)}")
+    if name not in _spectrum_cache:
+        import os
+        path = os.path.join(os.path.dirname(__file__), "data", _SPECTRA[name])
+        with np.load(path) as d:
+            _spectrum_cache[name] = (d["spectrum_freqs_hz"].copy(),
+                                     d["spectrum_shape"].copy())
+    return _spectrum_cache[name]
+
+
+def resolve_series_spectrum(spec):
+    """``None`` -> white; a name -> the packaged measurement; a tuple -> itself."""
+    if spec is None or isinstance(spec, tuple) and len(spec) == 2 and not isinstance(spec[0], str):
+        return spec
+    if isinstance(spec, str):
+        return load_series_spectrum(spec)
+    return spec
+
 
 def _series_spectrum_shape(n_ticks, series_spectrum, sampling_rate_hz):
     """Interpolated series amplitude spectrum (shape only).
@@ -50,6 +87,7 @@ def _series_spectrum_shape(n_ticks, series_spectrum, sampling_rate_hz):
     ``_noise_core``), so only the spectral *shape* matters. ``series_spectrum``
     is ``(freqs_hz, amps)`` (as in noise_spectrum.npz) or ``None`` → flat/white.
     """
+    series_spectrum = resolve_series_spectrum(series_spectrum)
     if series_spectrum is None:
         return None
     freqs_emp, amps_emp = series_spectrum
@@ -59,7 +97,7 @@ def _series_spectrum_shape(n_ticks, series_spectrum, sampling_rate_hz):
 
 
 def incoherent_noise(shape, wire_lengths_m, rng, *, enc=DEFAULT_ENC,
-                     series_spectrum=None,
+                     series_spectrum=DEFAULT_SERIES_SPECTRUM,
                      sampling_rate_hz=DEFAULT_SAMPLING_RATE_HZ):
     """Per-channel independent noise, shape ``(n_channels, n_ticks)`` [ADC].
 
@@ -153,7 +191,8 @@ def coherent_noise(n_channels, n_ticks, rng, *, group_size=DEFAULT_GROUP_SIZE,
 
 
 def generate_noise(shape, *, rng, wire_lengths_m=None, incoherent=True,
-                   coherent=False, enc=DEFAULT_ENC, series_spectrum=None,
+                   coherent=False, enc=DEFAULT_ENC,
+                   series_spectrum=DEFAULT_SERIES_SPECTRUM,
                    sampling_rate_hz=DEFAULT_SAMPLING_RATE_HZ,
                    group_size=DEFAULT_GROUP_SIZE, coh_rms=DEFAULT_COH_RMS_ADC,
                    coh_corner_freq_hz=DEFAULT_COH_CORNER_FREQ_HZ,

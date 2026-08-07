@@ -28,6 +28,7 @@ import numpy as np
 import torch
 
 from .noise import (coherent_noise as _coherent_noise_np, _series_spectrum_shape,
+                    DEFAULT_SERIES_SPECTRUM, resolve_series_spectrum,
                     DEFAULT_ENC, DEFAULT_SAMPLING_RATE_HZ, DEFAULT_GROUP_SIZE,
                     DEFAULT_COH_RMS_ADC, DEFAULT_COH_CORNER_FREQ_HZ,
                     DEFAULT_COH_SLOPE, DEFAULT_COH_BETA)
@@ -124,6 +125,7 @@ def densify(wire, time, value, plane_id, offset, geom):
 
 
 def _series_spectrum_torch(n_ticks, series_spectrum, sampling_rate_hz, device):
+    series_spectrum = resolve_series_spectrum(series_spectrum)
     spec = _series_spectrum_shape(n_ticks, series_spectrum, sampling_rate_hz)
     if spec is None:
         return None
@@ -219,7 +221,8 @@ def add_intrinsic_noise(grids, geom, *, seeds, enc=DEFAULT_ENC,
                         group_size=DEFAULT_GROUP_SIZE, coh_rms=DEFAULT_COH_RMS_ADC,
                         coh_corner_freq_hz=DEFAULT_COH_CORNER_FREQ_HZ,
                         coh_spectral_slope=DEFAULT_COH_SLOPE, beta=DEFAULT_COH_BETA,
-                        series_spectrum=None, coherent_numpy=False):
+                        series_spectrum=DEFAULT_SERIES_SPECTRUM,
+                        coherent_numpy=False):
     """Add fresh forward noise to per-plane dense grids in place; returns ``grids``.
 
     ``grids`` : ``{plane_id: (B, W, T)}`` on-device. ``geom`` : registry with
