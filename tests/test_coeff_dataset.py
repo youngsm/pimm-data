@@ -81,6 +81,33 @@ def test_dataset_get_data(tmp_path):
     np.testing.assert_array_equal(ds.band_lengths, BAND_LENGTHS)
 
 
+def test_sample_carries_source_identity(tmp_path):
+    """``ident`` maps a coeff event back to the simulation event it came from.
+
+    The corpus stores ``/ident`` (run, source_file, event) but the reader only
+    ever consumed it as a packed 64-bit id for aligning coeff<->coeff_clean. That
+    packing is deliberately lossy — a hash once a corpus spans several runs — so
+    nothing downstream could recover the source event. Anything that wants to
+    attach truth to a coeff event (a probe target, a per-cell label) needs the
+    triple, and without it the only alternative is rebuilding the corpus to carry
+    truth inline.
+    """
+    _write_shard(tmp_path / "cx_coeff_0000.h5")
+    ds = CoeffTPCDataset(data_root=str(tmp_path), dataset_name="cx")
+
+    seen = set()
+    for i in range(len(ds)):
+        ident = ds.get_data(i)["ident"]
+        assert set(ident) == {"run", "source_file", "event"}
+        assert isinstance(ident["event"], int)
+        assert isinstance(ident["source_file"], str)
+        seen.add((ident["run"], ident["source_file"], ident["event"]))
+    assert len(seen) == len(ds), "identities must distinguish every event"
+
+    # It identifies the SAMPLE, so it must not be mistaken for a row-space.
+    assert "ident" not in ds.get_data(0)["coeff"]
+
+
 def test_dataset_collect(tmp_path):
     _write_shard(tmp_path / "cx_coeff_0000.h5")
     collect = dict(type="Collect", parts={"coeff": dict(
@@ -96,7 +123,12 @@ def test_dataset_collect(tmp_path):
 
 # ── cross-repo golden: helix reference codec ⇄ pimm-data reader ──────────────
 
-_HELIX = "/sdf/group/neutrino/omara/helix-consolidate"
+# The helix checkout to cross-check against. It pointed at a THIRD checkout
+# (helix-consolidate) that no longer carries this code, so every test guarded by
+# it skipped — silently, since a skip for "helix not importable" is
+# indistinguishable from a machine that simply has no helix. Overridable so this
+# does not rot again the next time the checkout moves.
+_HELIX = os.environ.get("HELIX_ROOT", "/sdf/group/neutrino/omara/helix-extraction")
 
 
 def _import_helix():
@@ -371,7 +403,7 @@ def test_full_chain_to_model_keys_at_batch_gt_1(tmp_path):
     """
     import torch
     from torch.utils.data import DataLoader
-    from helix.tokenize import CoeffTokenize
+    from helix.model.tokenize import CoeffTokenize
     from pimm_data.collate import collate_fn
 
     # a real corpus always carries norm_sigma (build_corpus always writes the

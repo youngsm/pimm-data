@@ -79,6 +79,7 @@ class CoeffTPCReader(ShardReaderBase):
         self.has_coords = True
         self._meta_source = None
         self._meta_by_path = {}                 # h5_path -> its /config tables
+        self._ident_by_path = {}                # h5_path -> raw (run, source_file, event)
         self._dup_ident = {}                    # h5_path -> (rows, unique) when not 1:1
         self._id2pos = {}                       # h5_path -> {physical event id: write-order position}
         self._init_shards()
@@ -177,6 +178,16 @@ class CoeffTPCReader(ShardReaderBase):
                 src = (f["ident"]["source_file"][:]
                        if "source_file" in f["ident"] else None)
                 rn = f["ident"]["run"][:] if "run" in f["ident"] else None
+                # Keep the RAW triple as well as the packed id. The packed id
+                # exists to align coeff<->coeff_clean and is deliberately lossy
+                # (a hash, once a corpus spans several runs); it cannot be turned
+                # back into a source file and event number. Anything that wants
+                # to join a coeff event to the simulation event it came from —
+                # a probe target, a truth label — needs the triple itself.
+                self._ident_by_path[str(h5_path)] = dict(
+                    run=_as_str_list(rn, len(ev)),
+                    source_file=_as_str_list(src, len(ev)),
+                    event=ev.copy())
                 ev = _identity_ids(src, ev, run=rn)
                 # Record, don't raise: _build_index wraps this call in a bare
                 # `except Exception` that downgrades any error to a log warning and
@@ -194,8 +205,9 @@ class CoeffTPCReader(ShardReaderBase):
     def _locate_flat(self, idx):
         self._ensure_open()
         file_idx, event_id = self.locate(idx)           # event_id = physical /ident/event id
-        pos = self._id2pos[str(self.h5_files[file_idx])][int(event_id)]
-        return self._h5data[file_idx], pos
+        path = str(self.h5_files[file_idx])
+        pos = self._id2pos[path][int(event_id)]
+        return self._h5data[file_idx], pos, path
 
     def read_event(self, idx):
         """One event → flat dict of coeff rows (sliced by ``event_offset`` at the
@@ -206,13 +218,18 @@ class CoeffTPCReader(ShardReaderBase):
         :class:`~pimm_data.coeff.CoeffTPCDataset` supplies them from the paired
         noisy event after checking the digest.
         """
-        f, ev = self._locate_flat(idx)
+        f, ev, path = self._locate_flat(idx)
         coord = f["coord"]
         off = coord["event_offset"]
         a, b = int(off[ev]), int(off[ev + 1])
         out = {"value": f["value"][a:b].astype(np.float32)}
         if "coord_digest" in coord:
             out["_coord_digest"] = int(coord["coord_digest"][ev])
+        ident = self._ident_by_path.get(path)
+        if ident is not None:
+            out["_ident"] = dict(run=ident["run"][ev],
+                                 source_file=ident["source_file"][ev],
+                                 event=int(ident["event"][ev]))
         if self.has_coords:
             out.update(
                 band=coord["band"][a:b].astype(np.int32),
@@ -221,6 +238,13 @@ class CoeffTPCReader(ShardReaderBase):
                 tau=coord["tau"][a:b].astype(np.int32),
             )
         return out
+
+
+def _as_str_list(arr, n):
+    """h5py string column -> list[str] (``None`` -> empty strings)."""
+    if arr is None:
+        return [""] * n
+    return [s.decode() if isinstance(s, bytes) else str(s) for s in arr]
 
 
 def _identity_ids(source_file, event, run=None):

@@ -18,7 +18,7 @@ shards and emits a **nested** dict with a ``coeff`` part of per-coefficient rows
 Targets are separate joined modalities (``modalities=('coeff','coeff_clean')``):
 the clean target is its own ``coeff_clean`` shard family, aligned by identity.
 This dataset only yields ROWS — tokenization belongs to the model side and lives
-in ``helix.tokenize`` (:class:`helix.tokenize.CoeffTokenize`), which a recipe
+in ``helix.model.tokenize`` (:class:`helix.model.tokenize.CoeffTokenize`), which a recipe
 registers into :data:`pimm_data.TRANSFORMS`. The shard tables the tokenizer needs
 (``gids``/``n_wires``/``band_lengths``/``norm_sigma``) ride along in
 ``sample['coeff']['_meta']`` so a DataLoader worker is self-sufficient.
@@ -104,6 +104,14 @@ class CoeffTPCDataset(ShardEventDataset):
         if self.coeff_reader is not None:
             raw_noisy = self.coeff_reader.read_event(real_idx)
             data['coeff'] = self._build_coeff(raw_noisy, meta=self._shard_meta())
+            # The source event this coeff event was built from: (run, source_file,
+            # event). Carried at the TOP level rather than inside a part, because
+            # it identifies the sample, not a row-space — and because a consumer
+            # joining truth onto it must not have to guess which part to look in.
+            # This is what lets a probe reach the simulation truth without the
+            # corpus storing it: /ident is already written by every shard.
+            if '_ident' in raw_noisy:
+                data['ident'] = raw_noisy['_ident']
         if self.coeff_clean_reader is not None:
             raw_clean = self.coeff_clean_reader.read_event(real_idx)
             if 'band' not in raw_clean:                  # values-only target
