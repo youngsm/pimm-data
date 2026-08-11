@@ -14,6 +14,7 @@ import pytest
 from pimm_data.readers.coeff_tpc import CoeffTPCReader, write_coeff_shard
 from pimm_data.coeff import CoeffTPCDataset
 from pimm_data.transform import Compose
+from pimm_data.coeff_verify import verify_corpus
 
 BAND_LENGTHS = [8, 8, 16]
 GIDS = [0, 1]
@@ -276,13 +277,13 @@ def _ev(rng, ev, n=6, gids=GIDS, nb=len(BAND_LENGTHS)):
 
 
 def _write_pair(dirpath, event_ids, file_index=0, norm_sigma=None, seed=0,
-                gids=GIDS, values_only_clean=True):
+                gids=GIDS, values_only_clean=True, provenance=None):
     """A noisy shard + its co-supported clean target, as build_corpus writes them."""
     rng = np.random.default_rng(seed)
     evs = [_ev(rng, e, gids=gids) for e in event_ids]
     kw = dict(band_lengths=BAND_LENGTHS, gids=gids, n_wires=N_WIRES,
               basis_attrs=BASIS_ATTRS, dataset_name="cx", file_index=file_index,
-              norm_sigma=norm_sigma)
+              norm_sigma=norm_sigma, provenance=provenance)
     write_coeff_shard(dirpath / f"cx_coeff_{file_index:04d}.h5", evs, **kw)
     clean = [{**e, "value": e["value"] * 0.5} for e in evs]      # same coords
     write_coeff_shard(dirpath / f"cx_coeff_clean_{file_index:04d}.h5", clean,
@@ -526,6 +527,48 @@ def test_reader_rejects_a_shard_with_duplicate_identities(tmp_path):
                       dataset_name="cx")
     with pytest.raises(ValueError, match="does not uniquely identify"):
         CoeffTPCReader(data_root=str(tmp_path), dataset_name="cx")
+
+
+PROV = dict(geom="cubic_wireplane_geometry.json", geom_sha256="a" * 8,
+            spectrum="microboone", spectrum_sha256="c" * 8)
+
+
+def test_verifier_compares_the_dsp_inputs(tmp_path):
+    """A corpus mixing geometries or noise spectra is not one corpus.
+
+    Both hashes are written by the corpus builder and neither was compared —
+    ``verify_corpus`` pulled only ``code`` out of ``provenance_json``, while its
+    own message claimed "basis_digest and the geom/spectrum hashes pin the DSP's
+    inputs". A corpus assembled from shards built against different geometry, or
+    against a different (or white) noise spectrum, passed clean. The
+    coefficients are not comparable across such a split, and nothing else
+    downstream can see it.
+
+    This also exercises the writer's new ``provenance=``: it did not write
+    ``provenance_json`` at all, so every fixture-based test of these checks was
+    silently testing the legacy no-provenance path.
+    """
+    ns = np.full((len(GIDS), len(BAND_LENGTHS)), 2.0, np.float32)
+
+    ok = tmp_path / "ok"; ok.mkdir()
+    for k, ids in enumerate(([0, 1], [2, 3])):
+        _write_pair(ok, ids, file_index=k, norm_sigma=ns, seed=k, provenance=PROV)
+    assert verify_corpus(str(ok), "cx", expect_events=4) == []
+
+    for name, second in (("geom", dict(PROV, geom="OTHER.json", geom_sha256="b" * 8)),
+                         ("spectrum", dict(PROV, spectrum=None, spectrum_sha256=None))):
+        d = tmp_path / name; d.mkdir()
+        _write_pair(d, [0, 1], file_index=0, norm_sigma=ns, seed=0, provenance=PROV)
+        _write_pair(d, [2, 3], file_index=1, norm_sigma=ns, seed=1, provenance=second)
+        probs = verify_corpus(str(d), "cx")
+        assert any("DSP inputs" in p for p in probs), f"{name}: {probs}"
+
+    # Absence stays LEGACY, not disagreement — a pre-provenance corpus must not
+    # be flagged as mixed, or the real signal drowns.
+    legacy = tmp_path / "legacy"; legacy.mkdir()
+    for k, ids in enumerate(([0, 1], [2, 3])):
+        _write_pair(legacy, ids, file_index=k, norm_sigma=ns, seed=k)
+    assert not any("DSP inputs" in p for p in verify_corpus(str(legacy), "cx"))
 
 
 def test_corpus_verifier_catches_cross_shard_damage(tmp_path):

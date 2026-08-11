@@ -69,6 +69,7 @@ def verify_corpus(data_root, dataset_name, *, split="", expect_events=None,
     ref = None
     ident = Counter()
     code = []
+    dsp = []
     total = 0
     for p in noisy:
         try:
@@ -88,9 +89,20 @@ def verify_corpus(data_root, dataset_name, *, split="", expect_events=None,
                 # shards predating the field simply have none, and flagging
                 # every one of them would bury the case this exists to catch —
                 # two shards of one corpus built by different code.
-                code.append((os.path.basename(p),
-                             json.loads(str(cfg.attrs.get("provenance_json", "{}")))
-                             .get("code")))
+                _prov = json.loads(str(cfg.attrs.get("provenance_json", "{}")))
+                code.append((os.path.basename(p), _prov.get("code")))
+                # The DSP's INPUTS: which geometry file and which noise spectrum
+                # produced this shard. Both hashes are already written by
+                # build_coeff_corpus.py and were never compared — so a corpus
+                # assembled from shards built against different geometry, or
+                # against a different (or white) noise spectrum, passed clean.
+                # Handled like `code`, not like the fields above: absence is
+                # LEGACY, so only shards that carry them are compared.
+                dsp.append((os.path.basename(p),
+                            {k: _prov.get(k) for k in
+                             ("geom", "geom_sha256", "spectrum", "spectrum_sha256")}
+                            if any(k in _prov for k in
+                                   ("geom_sha256", "spectrum_sha256")) else None))
                 n = int(cfg.attrs["n_events"])
                 total += n
                 if "ident" in f:
@@ -137,6 +149,23 @@ def verify_corpus(data_root, dataset_name, *, split="", expect_events=None,
                 f"{len(code) - len(known)} of {len(code)} shards predate the "
                 f"provenance 'code' field (legacy); the rest record "
                 f"{known[0][1].get('git', '?')}")
+
+    # --- 3c. DSP inputs (geometry + noise spectrum) ---------------------------
+    known_dsp = [(f, d) for f, d in dsp if d]
+    if known_dsp:
+        seen = {json.dumps(d, sort_keys=True) for _, d in known_dsp}
+        if len(seen) > 1:
+            probs.append(
+                "shards were built against DIFFERENT DSP inputs (geometry or "
+                "noise spectrum): " + "; ".join(sorted(seen))
+                + "  (a corpus mixing geometries or noise models is not one "
+                  "corpus; the coefficients are not comparable)")
+        if len(known_dsp) != len(dsp):
+            probs.append(
+                f"{len(dsp) - len(known_dsp)} of {len(dsp)} shards predate the "
+                f"geom/spectrum provenance hashes (legacy); the rest record "
+                f"geom={known_dsp[0][1].get('geom')} "
+                f"spectrum={known_dsp[0][1].get('spectrum')}")
 
     # --- 4. duplicate events -------------------------------------------------
     dups = [k for k, c in ident.items() if c > 1]

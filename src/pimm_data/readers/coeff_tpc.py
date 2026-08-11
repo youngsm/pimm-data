@@ -333,7 +333,7 @@ def _ds(grp, name, data, comp):
 def write_coeff_shard(path, events, *, band_lengths, gids, n_wires, basis_attrs,
                       norm_sigma=None, dataset_name="", file_index=0,
                       global_event_offset=0, compression="gzip",
-                      coords=True, noise=None):
+                      coords=True, noise=None, provenance=None):
     """Write a flat-columnar coeff shard (standalone; the layout helix reads).
 
     ``events`` is a list of per-event dicts with keys ``band, plane_gid, wire,
@@ -345,6 +345,12 @@ def write_coeff_shard(path, events, *, band_lengths, gids, n_wires, basis_attrs,
     ``coords=False`` writes a values-only shard for a co-supported target (see
     :func:`coord_digest`); ``noise`` records how the input was noised, so two
     shards built with different noise are distinguishable after the fact.
+
+    ``provenance`` writes ``/config@provenance_json`` — the ``code`` block and the
+    ``geom``/``spectrum`` hashes that :mod:`pimm_data.coeff_verify` compares
+    across a corpus. This writer omitted it entirely, so no shard it produced
+    could exercise those checks, and every fixture-based test of the verifier was
+    silently testing the legacy path.
     """
     if not events:
         raise ValueError("write_coeff_shard: no events")
@@ -416,6 +422,8 @@ def write_coeff_shard(path, events, *, band_lengths, gids, n_wires, basis_attrs,
             cfg.attrs[k] = v
         cfg.attrs["has_coords"] = bool(coords)
         cfg.attrs["noise_json"] = json.dumps(noise or {}, sort_keys=True)
+        if provenance is not None:
+            cfg.attrs["provenance_json"] = json.dumps(provenance, sort_keys=True)
         cfg.create_dataset("band_lengths", data=np.asarray(band_lengths, np.int32))
         cfg.create_dataset("gids", data=np.asarray(gids, np.int32))
         cfg.create_dataset("n_wires", data=np.asarray(n_wires, np.int32))
