@@ -60,6 +60,8 @@ class CoeffTPCDataset(ShardEventDataset):
         strict_lengths=True,
         event_range=None,
         exclude_range=None,
+        holdout=None,
+        split_role=None,
     ):
         # strict by DEFAULT, unlike the other datasets. A coeff corpus is built
         # by hundreds of independent jobs, and four separate failure shapes —
@@ -91,6 +93,8 @@ class CoeffTPCDataset(ShardEventDataset):
         # consumed by ShardEventDataset.get_data_list
         self._event_range = tuple(event_range) if event_range else None
         self._exclude_range = tuple(exclude_range) if exclude_range else None
+        self._holdout = dict(holdout) if holdout else None
+        self._split_role = split_role
         self._canonical_reader = self.coeff_reader or self.coeff_clean_reader
         self._build_joint_index(source_label=f"CoeffTPCDataset({data_root!r})")
 
@@ -98,6 +102,55 @@ class CoeffTPCDataset(ShardEventDataset):
             split=split, data_root=data_root,
             transform=transform, ignore_index=ignore_index, loop=loop,
         )
+
+    def event_identity(self, idx):
+        """``(run, source_file, event)`` — the SIMULATION event, hashed to ints.
+
+        Stronger than the base's ``(config_id, file_index, event_id)``: those are
+        properties of this corpus's sharding, while ``/ident`` names the event in
+        the upstream simulation. So a split keyed on this survives not only shard
+        add/remove/reorder but a full corpus REBUILD with a different wavelet,
+        noise model or shard size — which matters because the probe holdout must
+        keep meaning the same events across exactly that kind of change.
+        """
+        import hashlib
+        t = self._ident_at(idx)
+        if t is None:                           # legacy shard with no /ident
+            file_idx, event_num = self._canonical_reader.locate(idx)
+            return (0, file_idx, event_num)
+        h = hashlib.blake2b(f"{t['run']}/{t['source_file']}".encode(),
+                            digest_size=8).digest()
+        return (int.from_bytes(h, 'big') >> 1, t['event'])   # >>1 keeps it positive
+
+    def _ident_at(self, idx):
+        """``{run, source_file, event}`` for a GLOBAL index, without reading it."""
+        r = self._canonical_reader
+        file_idx, event_num = r.locate(idx)
+        path = str(r.h5_files[file_idx])
+        ident = r._ident_by_path.get(path)
+        if ident is None:
+            return None
+        pos = r._id2pos[path][int(event_num)]
+        return dict(run=ident['run'][pos], source_file=ident['source_file'][pos],
+                    event=int(ident['event'][pos]))
+
+    def holdout_manifest(self):
+        """``[{run, source_file, event}, ...]`` for this split, in index order.
+
+        The written counterpart to the hash: reproducible is not the same as
+        auditable, and a probe holdout that exists only as code cannot be
+        inspected, diffed, or cited.
+        """
+        r = self._canonical_reader
+        out = []
+        for i in range(len(self.data_list)):
+            # Straight from the reader's index — NOT get_data(), which loads the
+            # event's full coefficient arrays. Resolving 20k identities that way
+            # meant 20k complete event reads for data that is already in memory.
+            t = self._ident_at(self.data_list[i])
+            if t is not None:
+                out.append(t)
+        return out
 
     def get_data(self, idx):
         # data_list VALUES are event ids. Identical to `idx % len(...)` while

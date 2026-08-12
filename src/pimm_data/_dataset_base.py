@@ -186,6 +186,9 @@ class ShardEventDataset(Dataset):
         on a hash of the event identity instead of a positional slice.
         """
         n = getattr(self, '_n_events', 0)
+        holdout = getattr(self, '_holdout', None)
+        if holdout:
+            return self._holdout_ids(n, holdout, getattr(self, '_split_role', None))
         rng = getattr(self, '_event_range', None)
         ids = list(range(n)) if rng is None else \
             list(range(max(0, int(rng[0])), min(n, int(rng[1]))))
@@ -200,6 +203,46 @@ class ShardEventDataset(Dataset):
             raise ValueError(
                 f"event_range={rng} with exclude_range={exc} selects NO events "
                 f"out of {n} — an empty split fails later and far from here.")
+        return ids
+
+    def event_identity(self, idx):
+        """Stable identity tuple for event ``idx``, for hash-based splitting.
+
+        Default: ``(config_id, file_index, physical_event_id)`` from the
+        canonical reader, matching :class:`~pimm_data.multimodal.MultiModalEventDataset`.
+        The physical id comes from ``locate``, so it is the event's own id rather
+        than its position in the joint index.
+
+        Subclasses with a stronger identity should override. ``CoeffTPCDataset``
+        does: its ``/ident`` triple names the SIMULATION event, so its split also
+        survives a corpus rebuild with a different basis or noise model.
+        """
+        file_idx, event_num = self._canonical_reader.locate(idx)
+        return (getattr(self, '_config_id', 0), file_idx, event_num)
+
+    def _holdout_ids(self, n, holdout, role):
+        from ._holdout import assign_split, normalise_fractions
+        fractions = dict(holdout.get('fractions') or {})
+        seed = int(holdout.get('seed', 0))
+        bounds = normalise_fractions(fractions)
+        if role is None:
+            raise ValueError(
+                f"holdout={fractions} was given but split= was not — which "
+                f"split should this dataset expose? Choose one of "
+                f"{sorted(fractions)}.")
+        if role not in fractions:
+            raise ValueError(
+                f"split={role!r} is not one of the holdout fractions "
+                f"{sorted(fractions)}")
+        ids = [i for i in range(n)
+               if assign_split(seed, self.event_identity(i), bounds) == role]
+        max_len = getattr(self, '_max_len', -1)
+        if max_len > 0:
+            ids = ids[:max_len]
+        if not ids:
+            raise ValueError(
+                f"split={role!r} at fractions {fractions} selected NO events "
+                f"out of {n}")
         return ids
 
     def get_data_name(self, idx):

@@ -663,3 +663,58 @@ def test_verifier_rejects_a_corpus_that_records_no_builder(tmp_path):
                     provenance=None)                       # legacy: no provenance
     probs = verify_corpus(str(tmp_path), "cx")
     assert any("provenance['code']" in p for p in probs), probs
+
+
+HOLDOUT = dict(seed=0, fractions=dict(train=0.6, val=0.2, probe=0.2))
+
+
+def _split_map(root, role):
+    ds = CoeffTPCDataset(data_root=str(root), dataset_name="cx",
+                         holdout=HOLDOUT, split_role=role)
+    return {(d["run"], d["source_file"], d["event"]) for d in ds.holdout_manifest()}
+
+
+def test_holdout_survives_corpus_growth(tmp_path):
+    """Adding a shard must not move any existing event between splits.
+
+    This is the whole reason the split is keyed on identity rather than
+    position. A positional range (`event_range=(17700, 18000)`) is a valid split
+    exactly once: the joint index is built over a GLOB, so one more shard
+    renumbers everything after it and a probe holdout silently becomes a set of
+    trained-on events. The coeff corpus is explicitly built to grow — one run
+    now, eight planned — so this is the failure that would actually happen.
+    """
+    # 40 events, not a handful: at 20% a six-event fixture can legitimately put
+    # ZERO in probe, and the empty-split guard (correctly) refuses that.
+    _write_pair(tmp_path, list(range(40)), file_index=0, seed=0)
+    before = {r: _split_map(tmp_path, r) for r in ("train", "val", "probe")}
+    assert sum(len(v) for v in before.values()) == 40     # every event placed
+
+    # Growth means NEW events. Re-writing the same ids would give two shards
+    # identical (run, source_file, event) identities, which the reader's own
+    # /ident uniqueness check exists to reject.
+    _write_pair(tmp_path, list(range(40, 80)), file_index=1, seed=1)
+    after = {r: _split_map(tmp_path, r) for r in ("train", "val", "probe")}
+    assert sum(len(v) for v in after.values()) == 80
+
+    for role in before:
+        assert before[role] <= after[role], (
+            f"{role}: events changed split when a shard was added — "
+            f"moved out: {before[role] - after[role]}")
+
+
+def test_holdout_splits_are_disjoint_and_total(tmp_path):
+    _write_pair(tmp_path, list(range(40)), file_index=0, seed=3)
+    m = {r: _split_map(tmp_path, r) for r in ("train", "val", "probe")}
+    allv = [e for v in m.values() for e in v]
+    assert len(allv) == len(set(allv)) == 40          # disjoint AND complete
+
+
+def test_holdout_requires_a_role_and_valid_fractions(tmp_path):
+    _write_pair(tmp_path, list(range(40)), file_index=0)
+    with pytest.raises(ValueError, match="split= was not"):
+        CoeffTPCDataset(data_root=str(tmp_path), dataset_name="cx", holdout=HOLDOUT)
+    with pytest.raises(ValueError, match="sum to 1.0"):
+        CoeffTPCDataset(data_root=str(tmp_path), dataset_name="cx",
+                        holdout=dict(seed=0, fractions=dict(train=0.5, val=0.2)),
+                        split_role="train")
