@@ -88,6 +88,7 @@ class CoeffTPCDataset(ShardEventDataset):
                 data_root=self._modality_root('coeff_clean'), split=split,
                 dataset_name=dataset_name, modality='coeff_clean')
 
+        # consumed by ShardEventDataset.get_data_list
         self._event_range = tuple(event_range) if event_range else None
         self._exclude_range = tuple(exclude_range) if exclude_range else None
         self._canonical_reader = self.coeff_reader or self.coeff_clean_reader
@@ -98,41 +99,10 @@ class CoeffTPCDataset(ShardEventDataset):
             transform=transform, ignore_index=ignore_index, loop=loop,
         )
 
-    def get_data_list(self):
-        """Event indices for this split.
-
-        The base class offers only a PREFIX (``max_len``), so train and val
-        configured against the same root returned the identical events — a
-        "validation" loss measured on the training set, and any probe scored on
-        events the model had memorised. A contiguous slice is the smallest thing
-        that fixes it, and it mirrors what the research trainer did by hand:
-        ``files[:val_n]`` held out for validation, plus a separate
-        ``[holdout_lo, holdout_hi]`` band dropped from training so downstream
-        probes have events no split has trained on.
-
-        ``event_range=(lo, hi)`` selects ``[lo, hi)``; ``exclude_range=(lo, hi)``
-        removes that band. ``max_len`` still applies, after both.
-        """
-        ids = super().get_data_list() if self._event_range is None else \
-            list(range(max(0, self._event_range[0]),
-                       min(getattr(self, '_n_events', 0), self._event_range[1])))
-        if self._exclude_range is not None:
-            lo, hi = self._exclude_range
-            ids = [i for i in ids if not (lo <= i < hi)]
-        if self._event_range is not None:
-            m = getattr(self, '_max_len', -1)
-            if m > 0:
-                ids = ids[:m]
-            if not ids:
-                raise ValueError(
-                    f"event_range={self._event_range} with "
-                    f"exclude_range={self._exclude_range} selects NO events out "
-                    f"of {getattr(self, '_n_events', 0)} — an empty split fails "
-                    f"later and far from here.")
-        return ids
-
     def get_data(self, idx):
-        real_idx = idx % len(self.data_list)
+        # data_list VALUES are event ids. Identical to `idx % len(...)` while
+        # the list is range(n), and the only correct form once it is not.
+        real_idx = self.data_list[idx % len(self.data_list)]
         data = {
             'name': self.get_data_name(real_idx),
             'split': self.split if isinstance(self.split, str) else 'custom',

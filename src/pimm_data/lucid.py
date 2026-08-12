@@ -187,7 +187,9 @@ class LUCiDDataset(ShardEventDataset):
         )
 
     def get_data(self, idx):
-        real_idx = idx % len(self.data_list)
+        # data_list VALUES are event ids. Identical to `idx % len(...)` while
+        # the list is range(n), and the only correct form once it is not.
+        real_idx = self.data_list[idx % len(self.data_list)]
 
         data = {
             'name': self.get_data_name(real_idx),

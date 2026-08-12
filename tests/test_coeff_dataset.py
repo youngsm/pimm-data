@@ -109,6 +109,40 @@ def test_sample_carries_source_identity(tmp_path):
     assert "ident" not in ds.get_data(0)["coeff"]
 
 
+def test_split_selects_the_events_actually_READ(tmp_path):
+    """Assert on what the reader returns, not on what get_data_list says.
+
+    The first version of this feature verified `get_data_list()` and declared
+    success. But `get_data` did `real_idx = idx % len(self.data_list)` and passed
+    that to the reader — it never dereferenced the list. So `data_list` said
+    [18000, 18001, ...] while the events READ were [0, 1, ...]: the split was
+    inert, train and val returned the same events, and the "validation" loss was
+    still a training loss. Every assertion that looked at the list passed.
+
+    Index == value held for every dataset until the first non-identity list, so
+    the bug was latent in the base contract rather than in one dataset.
+    """
+    _write_shard(tmp_path / "cx_coeff_0000.h5", n_events=10)
+    ident = lambda ds, i: ds.get_data(i)["ident"]["event"]
+
+    head = CoeffTPCDataset(data_root=str(tmp_path), dataset_name="cx",
+                           event_range=(0, 4))
+    tail = CoeffTPCDataset(data_root=str(tmp_path), dataset_name="cx",
+                           event_range=(6, 10))
+    assert [ident(head, i) for i in range(len(head))] == [0, 1, 2, 3]
+    assert [ident(tail, i) for i in range(len(tail))] == [6, 7, 8, 9]
+    assert not ({ident(head, i) for i in range(len(head))} &
+                {ident(tail, i) for i in range(len(tail))})
+
+    holed = CoeffTPCDataset(data_root=str(tmp_path), dataset_name="cx",
+                            event_range=(0, 10), exclude_range=(3, 6))
+    assert [ident(holed, i) for i in range(len(holed))] == [0, 1, 2, 6, 7, 8, 9]
+
+    with pytest.raises(ValueError, match="selects NO events"):
+        CoeffTPCDataset(data_root=str(tmp_path), dataset_name="cx",
+                        event_range=(0, 10), exclude_range=(0, 10))
+
+
 def test_dataset_collect(tmp_path):
     _write_shard(tmp_path / "cx_coeff_0000.h5")
     collect = dict(type="Collect", parts={"coeff": dict(

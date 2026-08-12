@@ -169,11 +169,38 @@ class ShardEventDataset(Dataset):
             source_label=source_label, filter_label=filter_label)
 
     def get_data_list(self):
+        """Event ids for this split.
+
+        The VALUES are event ids, not positions — subclasses must dereference
+        ``self.data_list[i]`` rather than passing ``i`` to a reader. That was
+        only ever true by coincidence (``list(range(n))`` makes index == value),
+        and the first non-identity list silently read the wrong events.
+
+        ``event_range=(lo, hi)`` selects ``[lo, hi)``; ``exclude_range=(lo, hi)``
+        removes that band; ``max_len`` truncates whatever is left. Lives here
+        rather than on one dataset so every reader-backed dataset can express a
+        split, and so the index contract is stated in one place.
+
+        For a split that is stable under shard reordering or corpus growth, see
+        :class:`~pimm_data.multimodal.MultiModalEventDataset`, which partitions
+        on a hash of the event identity instead of a positional slice.
+        """
         n = getattr(self, '_n_events', 0)
+        rng = getattr(self, '_event_range', None)
+        ids = list(range(n)) if rng is None else \
+            list(range(max(0, int(rng[0])), min(n, int(rng[1]))))
+        exc = getattr(self, '_exclude_range', None)
+        if exc is not None:
+            lo, hi = int(exc[0]), int(exc[1])
+            ids = [i for i in ids if not (lo <= i < hi)]
         max_len = getattr(self, '_max_len', -1)
         if max_len > 0:
-            n = min(n, max_len)
-        return list(range(n))
+            ids = ids[:max_len]
+        if not ids and (rng is not None or exc is not None):
+            raise ValueError(
+                f"event_range={rng} with exclude_range={exc} selects NO events "
+                f"out of {n} — an empty split fails later and far from here.")
+        return ids
 
     def get_data_name(self, idx):
         reader = self._canonical_reader
