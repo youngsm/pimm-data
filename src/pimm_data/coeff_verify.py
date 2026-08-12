@@ -131,6 +131,19 @@ def verify_corpus(data_root, dataset_name, *, split="", expect_events=None,
 
     # --- 3b. code version ----------------------------------------------------
     known = [(f, c) for f, c in code if c]
+    if not known and code:
+        # A corpus where NOTHING records its builder must fail, not pass. The
+        # guard below only compares shards that carry `code`, so a corpus with
+        # zero of them skipped the check entirely and reported clean — measured
+        # on run_0027575715: 0 of 100 shards carry it, verify_corpus said OK,
+        # and one surviving build log shows 12 shards were rebuilt from a
+        # different worktree. "Which code produced this data" is the one
+        # question a provenance check exists to answer.
+        probs.append(
+            f"NO shard records provenance['code'] ({len(code)} shards): the "
+            f"corpus cannot say which helix built it, so a mixed-tree build is "
+            f"undetectable. Rebuild with a current builder, or record the "
+            f"provenance alongside the shards.")
     if known:
         seen = {json.dumps(c, sort_keys=True) for _, c in known}
         if len(seen) > 1:

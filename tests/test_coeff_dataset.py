@@ -310,8 +310,17 @@ def _ev(rng, ev, n=6, gids=GIDS, nb=len(BAND_LENGTHS)):
                 run="run_000", source_file=f"cx_sensor_{ev // 2:04d}.h5", event=ev)
 
 
+#: Fixtures write real provenance by DEFAULT. They used to write none, so every
+#: fixture-based test of the verifier silently exercised the legacy
+#: no-provenance path — including the cross-shard-damage test, which asserted a
+#: clean corpus while the `code` comparison it was meant to reach was skipped.
+FIXTURE_PROV = dict(geom="cubic_wireplane_geometry.json", geom_sha256="a" * 8,
+                    spectrum="microboone", spectrum_sha256="c" * 8,
+                    code=dict(version="0.0.0-test", git="0" * 40, git_dirty=False))
+
+
 def _write_pair(dirpath, event_ids, file_index=0, norm_sigma=None, seed=0,
-                gids=GIDS, values_only_clean=True, provenance=None):
+                gids=GIDS, values_only_clean=True, provenance=FIXTURE_PROV):
     """A noisy shard + its co-supported clean target, as build_corpus writes them."""
     rng = np.random.default_rng(seed)
     evs = [_ev(rng, e, gids=gids) for e in event_ids]
@@ -563,8 +572,7 @@ def test_reader_rejects_a_shard_with_duplicate_identities(tmp_path):
         CoeffTPCReader(data_root=str(tmp_path), dataset_name="cx")
 
 
-PROV = dict(geom="cubic_wireplane_geometry.json", geom_sha256="a" * 8,
-            spectrum="microboone", spectrum_sha256="c" * 8)
+PROV = FIXTURE_PROV
 
 
 def test_verifier_compares_the_dsp_inputs(tmp_path):
@@ -639,3 +647,19 @@ def test_corpus_verifier_catches_cross_shard_damage(tmp_path):
     _write_pair(dup, [2, 3, 4], file_index=1, norm_sigma=ns, seed=4)   # 2 repeats
     assert any("more than once" in p for p in verify_corpus(str(dup), "cx")), \
         verify_corpus(str(dup), "cx")
+
+
+def test_verifier_rejects_a_corpus_that_records_no_builder(tmp_path):
+    """A corpus where NOTHING records its builder must FAIL, not pass.
+
+    The `code` comparison only looked at shards that carry the field, so a
+    corpus with zero of them skipped the check and reported clean. Measured on
+    the real corpus: 0 of 100 shards carry it, verify_corpus said OK, and a
+    surviving build log shows 12 shards were built from a different worktree.
+    """
+    ns = np.full((len(GIDS), len(BAND_LENGTHS)), 2.0, np.float32)
+    for k, ids in enumerate(([0, 1], [2, 3])):
+        _write_pair(tmp_path, ids, file_index=k, norm_sigma=ns, seed=k,
+                    provenance=None)                       # legacy: no provenance
+    probs = verify_corpus(str(tmp_path), "cx")
+    assert any("provenance['code']" in p for p in probs), probs
