@@ -320,12 +320,14 @@ FIXTURE_PROV = dict(geom="cubic_wireplane_geometry.json", geom_sha256="a" * 8,
 
 
 def _write_pair(dirpath, event_ids, file_index=0, norm_sigma=None, seed=0,
-                gids=GIDS, values_only_clean=True, provenance=FIXTURE_PROV):
+                gids=GIDS, values_only_clean=True, provenance=FIXTURE_PROV,
+                basis_attrs=None):
     """A noisy shard + its co-supported clean target, as build_corpus writes them."""
     rng = np.random.default_rng(seed)
     evs = [_ev(rng, e, gids=gids) for e in event_ids]
     kw = dict(band_lengths=BAND_LENGTHS, gids=gids, n_wires=N_WIRES,
-              basis_attrs=BASIS_ATTRS, dataset_name="cx", file_index=file_index,
+              basis_attrs=basis_attrs or BASIS_ATTRS, dataset_name="cx",
+              file_index=file_index,
               norm_sigma=norm_sigma, provenance=provenance)
     write_coeff_shard(dirpath / f"cx_coeff_{file_index:04d}.h5", evs, **kw)
     clean = [{**e, "value": e["value"] * 0.5} for e in evs]      # same coords
@@ -718,3 +720,49 @@ def test_holdout_requires_a_role_and_valid_fractions(tmp_path):
         CoeffTPCDataset(data_root=str(tmp_path), dataset_name="cx",
                         holdout=dict(seed=0, fractions=dict(train=0.5, val=0.2)),
                         split_role="train")
+
+
+def test_shards_from_two_different_GATES_are_rejected(tmp_path):
+    """The real corpus-mixing hazard, and the one every other check misses.
+
+    /sdf/data/neutrino/omara/coeff_tpc and .../coeff_tpc_r1 differ ONLY in the
+    coherent-removal gate: r1 records removal_json tau=0.05, the older tree
+    records no tau at all. Their band_lengths, gids, n_wires, norm_sigma and
+    sigma_norm are identical, so every pre-existing agreement check passes on a
+    directory holding both — they would read as one corpus and train as two.
+
+    Not hypothetical: submit_coeff_corpus.sh defaulted its output root to the
+    older corpus while `--tau` unset already meant the newer gate, so the
+    ordinary way to extend a corpus wrote r1 shards into the pre-r1 tree.
+    """
+    legacy = dict(BASIS_ATTRS)
+    legacy["removal_json"] = json.dumps(dict(kind="gate", kgate=3.0))
+    gated = dict(BASIS_ATTRS)
+    gated["removal_json"] = json.dumps(dict(kind="gate", kgate=3.0, tau=0.05))
+
+    _write_pair(tmp_path, [0, 1], file_index=0, seed=1, basis_attrs=legacy)
+    _write_pair(tmp_path, [2, 3], file_index=1, seed=2, basis_attrs=gated)
+    with pytest.raises(ValueError) as ei:
+        CoeffTPCDataset(data_root=str(tmp_path), dataset_name="cx")
+    msg = str(ei.value)
+    assert "removal_json" in msg or "basis_digest" in msg, msg
+    assert "different DSP" in msg, "the message must say WHY they are not one corpus"
+
+
+def test_shards_with_a_different_WAVELET_are_rejected(tmp_path):
+    """basis_digest covers the basis itself, not just the gate."""
+    other = dict(BASIS_ATTRS)
+    other["wavelet"] = "coif3"
+    _write_pair(tmp_path, [0, 1], file_index=0, seed=1)
+    _write_pair(tmp_path, [2, 3], file_index=1, seed=2, basis_attrs=other)
+    with pytest.raises(ValueError, match="basis_digest"):
+        CoeffTPCDataset(data_root=str(tmp_path), dataset_name="cx")
+
+
+def test_one_gate_across_all_shards_is_accepted(tmp_path):
+    """The guard must not refuse a good corpus — bytes-vs-str from h5py in
+    particular, which is how a well-meant identity check rejects everything."""
+    _write_pair(tmp_path, [0, 1], file_index=0, seed=1)
+    _write_pair(tmp_path, [2, 3], file_index=1, seed=2)
+    ds = CoeffTPCDataset(data_root=str(tmp_path), dataset_name="cx")
+    assert len(ds) == 4

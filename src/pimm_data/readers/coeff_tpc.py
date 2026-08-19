@@ -96,6 +96,16 @@ class CoeffTPCReader(ShardReaderBase):
         shard's events silently — so raising from ``_index_for_shard`` would turn
         a mis-built corpus into a quietly shorter one.
         """
+        def _as_text(v):
+            """Bytes and str compare equal — h5py returns either depending on
+            how the attr was written, and a spurious mismatch here would refuse
+            a perfectly good corpus."""
+            if v is None:
+                return None
+            if isinstance(v, bytes):
+                return v.decode("utf-8", "replace")
+            return str(v)
+
         def _same(a, b):
             if a is None or b is None:
                 return a is None and b is None
@@ -127,6 +137,24 @@ class CoeffTPCReader(ShardReaderBase):
                 raise ValueError(
                     f"{self._MODALITY} shards disagree on has_coords: "
                     f"{ref_path} -> {ref['has_coords']}, {path} -> {m['has_coords']}")
+            # The DSP identity. Everything above is geometry and normalisation,
+            # which two corpora built with DIFFERENT signal processing share
+            # exactly — so none of it would have caught shards from two gates
+            # landing in one directory. That is not hypothetical: the corpus
+            # submit script defaulted its output root to the older corpus while
+            # defaulting its gate to the newer one, so the ordinary way to
+            # extend a corpus wrote r1-gated shards into the pre-r1 tree, where
+            # they would have read as one corpus and trained as two.
+            for name, what in (("basis_digest", "wavelet basis / threshold"),
+                               ("removal_json", "coherent-removal gate")):
+                a, b = ref.get(name), m.get(name)
+                if _as_text(a) != _as_text(b):
+                    raise ValueError(
+                        f"{self._MODALITY} shards disagree on /config/{name} "
+                        f"({what}):\n  {ref_path} -> {_as_text(a)}\n"
+                        f"  {path} -> {_as_text(b)}\n"
+                        f"These shards were built with different DSP and are not "
+                        f"one corpus, however similar their geometry looks.")
 
     def _find_files(self):
         """Glob shards with the tag anchored to a digit — ``{name}_{modality}_[0-9]*.h5``
@@ -166,7 +194,16 @@ class CoeffTPCReader(ShardReaderBase):
             hc = bool(cfg.attrs.get("has_coords", True))
             self._meta_by_path[str(h5_path)] = dict(
                 band_lengths=bl, gids=gids, n_wires=n_wires, norm_sigma=ns,
-                sigma_norm=sn, has_coords=hc)
+                sigma_norm=sn, has_coords=hc,
+                # The DSP identity, as distinct from the geometry. Two corpora
+                # can share every table above and still be different signal:
+                # coeff_tpc and coeff_tpc_r1 have identical band_lengths, gids,
+                # n_wires, norm_sigma and sigma_norm, and differ only in the
+                # coherent-removal gate (r1 records removal_json tau=0.05, the
+                # older one records no removal_json at all) — which shows up
+                # here as different basis_digests, 8c4542.. vs 7f954a...
+                basis_digest=cfg.attrs.get("basis_digest"),
+                removal_json=cfg.attrs.get("removal_json"))
             if self.band_lengths is None:
                 self.config_attrs = dict(cfg.attrs)
                 self.band_lengths, self.gids, self.n_wires = bl, gids, n_wires
