@@ -68,8 +68,8 @@ both decorating it and importing the module from `__init__.py`.
 Datasets emit `{'step': {...}, 'sensor': {...}, 'hits': {...}, 'labl': {...}}`.
 There is **no bare `coord` at the top level**. Transforms that hardcode
 `'coord'`/`'segment'` must be scoped to a part with `Apply(on=…)` (a tuple
-`on=` shares one RNG draw across parts; `ApplyToStream`/`ApplyToModality`
-remain as back-compat aliases):
+`on=` shares one RNG draw across parts). `Apply` is the only spelling —
+`ApplyToStream`/`ApplyToModality` were aliases and are **removed**:
 
 ```python
 dict(type='Apply', on='step', transforms=[
@@ -82,9 +82,13 @@ single-part `Collect(part='step', keys=[...])`) is the terminal per-event
 transform: it pulls each named part into the flat-prefixed batch and
 converts arrays to torch tensors. **`Collect` must be last** in the
 per-event head — tensor output is required for `DataLoader(num_workers > 0)`
-to use file-descriptor IPC instead of pickling full arrays. (`parts=`/`part=`
-replaced `modalities=`/`modality=`, kept as deprecated aliases; the old
-`stream=` is gone.)
+to use file-descriptor IPC instead of pickling full arrays.
+
+`parts=`/`part=` are the only names on `Collect`; `modalities=`/`modality=`
+were aliases and are **removed**, and are rejected by name rather than falling
+into `**kwargs` — because `modalities=` is still live one level up on the
+DATASET constructor, where it means something different (which modalities to
+READ). The old `stream=` is gone.
 
 ### Dense path (post-collate tail, map → reduce → map)
 

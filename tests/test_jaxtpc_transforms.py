@@ -1,7 +1,7 @@
-"""Which pimm-data transforms work inside ApplyToModality on each modality?
+"""Which pimm-data transforms work inside Apply on each modality?
 
 For every 'typical' transform and every modality (3D seg, 2D inst, 2D sensor),
-build a tiny pipeline with ApplyToModality + the transform, run it, and check
+build a tiny pipeline with Apply + the transform, run it, and check
 the output shape is sensible. This documents — and enforces — the supported
 recipes for using transforms on nested sub-dicts (see README §Using with
 transforms).
@@ -47,12 +47,12 @@ def sensor_sample(jaxtpc_data_root):
 
 
 def _run(sample, modality, transforms):
-    """Run transforms inside an ApplyToModality on a fresh copy and return the
+    """Run transforms inside an Apply on a fresh copy and return the
     post-transform sub-dict."""
     from copy import deepcopy
     data = deepcopy(sample)
     pipe = Compose([
-        dict(type='ApplyToModality', modality=modality, transforms=transforms),
+        dict(type='Apply', on=modality, transforms=transforms),
     ])
     data = pipe(data)
     return data[modality]
@@ -243,7 +243,7 @@ def test_recipe_3d_supervised_step(jaxtpc_data_root):
     configs/detector/_base_/jaxtpc_step.py."""
     ds = _ds(jaxtpc_data_root, ('step', 'labl'),
              transform=[
-                 dict(type='ApplyToModality', modality='step', transforms=[
+                 dict(type='Apply', on='step', transforms=[
                      dict(type='RemapSegment', scheme='motif_5cls'),
                      dict(type='NormalizeCoord', center=[0, 0, 0], scale=4000.0),
                      dict(type='LogTransform', min_val=0.01, max_val=20.0),
@@ -268,7 +268,7 @@ def test_recipe_2d_supervised_hits(jaxtpc_data_root):
     """2D supervised-on-hits pipeline (hits+labl combo)."""
     ds = _ds(jaxtpc_data_root, ('hits', 'labl'),
              transform=[
-                 dict(type='ApplyToModality', modality='hits', transforms=[
+                 dict(type='Apply', on='hits', transforms=[
                      dict(type='RemapSegment', scheme='motif_5cls'),
                      dict(type='GridSample', grid_size=1.0, hash_type='fnv',
                           mode='train', return_grid_coord=True),
@@ -287,7 +287,7 @@ def test_recipe_ssl_raw_sensor(jaxtpc_data_root):
     """SSL on raw sensor — no labels flow."""
     ds = _ds(jaxtpc_data_root, ('sensor',),
              transform=[
-                 dict(type='ApplyToModality', modality='sensor', transforms=[
+                 dict(type='Apply', on='sensor', transforms=[
                      dict(type='GridSample', grid_size=1.0, mode='train',
                           return_grid_coord=True),
                      dict(type='ShufflePoint'),
@@ -303,15 +303,15 @@ def test_recipe_ssl_raw_sensor(jaxtpc_data_root):
 
 
 def test_recipe_denoising_sensor_plus_hits(jaxtpc_data_root):
-    """Two ApplyToModality blocks, one per cloud. Both streams transform
+    """Two Apply blocks, one per cloud. Both streams transform
     independently; Collect pulls whichever becomes the model input."""
     ds = _ds(jaxtpc_data_root, ('sensor', 'hits'),
              transform=[
-                 dict(type='ApplyToModality', modality='sensor', transforms=[
+                 dict(type='Apply', on='sensor', transforms=[
                      dict(type='GridSample', grid_size=1.0, mode='train',
                           return_grid_coord=True),
                  ]),
-                 dict(type='ApplyToModality', modality='hits', transforms=[
+                 dict(type='Apply', on='hits', transforms=[
                      dict(type='GridSample', grid_size=1.0, mode='train',
                           return_grid_coord=True),
                  ]),

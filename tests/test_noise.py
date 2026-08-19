@@ -7,7 +7,7 @@ Covers, in order:
     helix-style scatter, and is wire-only;
   * AddNoise reproducibility per event (stable across DataLoader workers) and
     its Densify-first ordering contract;
-  * end-to-end dataset pipeline (ApplyToModality: Densify -> AddNoise);
+  * end-to-end dataset pipeline (Apply: Densify -> AddNoise);
   * reconciliation against JAXTPC's canonical forward model (skipped if the
     sibling JAXTPC repo isn't importable).
 """
@@ -147,7 +147,7 @@ def test_sensor_sample_carries_shape(jaxtpc_data_root):
 
 def test_densify_reconstructs_grid(jaxtpc_data_root):
     sub = _sensor_sample(jaxtpc_data_root)
-    pipe = Compose([dict(type='ApplyToModality', modality='sensor',
+    pipe = Compose([dict(type='Apply', on='sensor',
                          transforms=[dict(type='Densify')])])
     out = pipe(deepcopy({'sensor': sub}))['sensor']
     assert 'dense' in out
@@ -167,7 +167,7 @@ def test_densify_reconstructs_grid(jaxtpc_data_root):
 
 def test_densify_pixel_raises(jaxtpc_pixel_data_root):
     sub = _sensor_sample(jaxtpc_pixel_data_root)
-    pipe = Compose([dict(type='ApplyToModality', modality='sensor',
+    pipe = Compose([dict(type='Apply', on='sensor',
                          transforms=[dict(type='Densify', on_pixel='raise')])])
     with pytest.raises(ValueError):
         pipe(deepcopy({'sensor': sub}))
@@ -175,7 +175,7 @@ def test_densify_pixel_raises(jaxtpc_pixel_data_root):
 
 def test_densify_pixel_skip(jaxtpc_pixel_data_root):
     sub = _sensor_sample(jaxtpc_pixel_data_root)
-    pipe = Compose([dict(type='ApplyToModality', modality='sensor',
+    pipe = Compose([dict(type='Apply', on='sensor',
                          transforms=[dict(type='Densify', on_pixel='skip')])])
     out = pipe(deepcopy({'sensor': sub}))['sensor']
     assert 'dense' not in out
@@ -186,7 +186,7 @@ def test_densify_pixel_skip(jaxtpc_pixel_data_root):
 # --------------------------------------------------------------------------
 
 def _densify_addnoise(sub, **addnoise_kw):
-    pipe = Compose([dict(type='ApplyToModality', modality='sensor', transforms=[
+    pipe = Compose([dict(type='Apply', on='sensor', transforms=[
         dict(type='Densify'),
         dict(type='AddNoise', **addnoise_kw),
     ])])
@@ -195,7 +195,7 @@ def _densify_addnoise(sub, **addnoise_kw):
 
 def test_addnoise_requires_densify(jaxtpc_data_root):
     sub = _sensor_sample(jaxtpc_data_root)
-    pipe = Compose([dict(type='ApplyToModality', modality='sensor',
+    pipe = Compose([dict(type='Apply', on='sensor',
                          transforms=[dict(type='AddNoise')])])
     with pytest.raises(KeyError):
         pipe(deepcopy({'sensor': sub}))
@@ -233,11 +233,11 @@ def test_addnoise_seed_and_name_vary(jaxtpc_data_root):
 
 
 def test_pipeline_end_to_end(jaxtpc_data_root):
-    """Full dataset transform: Densify -> AddNoise(coherent) under ApplyToModality."""
+    """Full dataset transform: Densify -> AddNoise(coherent) under Apply."""
     ds = JAXTPCDataset(
         data_root=jaxtpc_data_root, split='', dataset_name='sim',
         modalities=('sensor',), max_len=2,
-        transform=[dict(type='ApplyToModality', modality='sensor', transforms=[
+        transform=[dict(type='Apply', on='sensor', transforms=[
             dict(type='Densify'),
             dict(type='AddNoise', coherent=True, incoherent=False,
                  group_size=64),
@@ -296,7 +296,7 @@ def test_sensor_sample_carries_pedestal(jaxtpc_data_root):
 
 def test_digitize_requires_dense(jaxtpc_data_root):
     sub = _sensor_sample(jaxtpc_data_root)
-    pipe = Compose([dict(type='ApplyToModality', modality='sensor',
+    pipe = Compose([dict(type='Apply', on='sensor',
                          transforms=[dict(type='Digitize')])])
     with pytest.raises(KeyError):
         pipe(deepcopy({'sensor': sub}))
@@ -309,7 +309,7 @@ def test_full_forward_pipeline_densify_addnoise_digitize(jaxtpc_data_root):
     ds = JAXTPCDataset(
         data_root=jaxtpc_data_root, split='', dataset_name='sim',
         modalities=('sensor',), max_len=2,
-        transform=[dict(type='ApplyToModality', modality='sensor', transforms=[
+        transform=[dict(type='Apply', on='sensor', transforms=[
             dict(type='Densify'),
             dict(type='AddNoise', coherent=True, incoherent=False),
             dict(type='Digitize', pedestal=ped, n_bits=12),

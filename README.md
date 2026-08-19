@@ -390,7 +390,8 @@ exposes `data['step']`'s keys as **bare** canonical names (`coord`, `segment`,
 multi-part `Apply(on=('step','sensor'))` is **implicitly shared** — same RNG draw
 per part (co-registered rotate/flip); independent augmentation = separate `Apply`
 blocks. If a part is missing it's a no-op (`required=True` to raise).
-(`ApplyToModality` is a back-compat alias for the single-part form.)
+(`Apply(on='step', …)` is the single-part form; the old
+`ApplyToModality`/`ApplyToStream` aliases have been removed.)
 
 ```python
 dict(type='Apply', on='step', transforms=[
@@ -693,7 +694,7 @@ src/pimm_data/
     _joint_index.py    build_joint_index — cross-modality event alignment
     _roles.py          per-part roles + role-driven batching primitives
     transform.py       Compose, TRANSFORMS, Collect, Apply, MultiCrop, ...
-    detector_transforms.py  Apply/ApplyToModality, MultiCrop, AggregateSensorHits,
+    detector_transforms.py  Apply, MultiCrop, AggregateSensorHits,
                             SetupGraph/BuildNexus/Align, PDGToSemantic, RemapSegment
     batch_ops.py       to_batched_coords, split_event (boundary helpers)
     collate.py         collate_fn, point_collate_fn, inseg_collate_fn

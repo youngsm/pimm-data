@@ -213,8 +213,6 @@ class Collect(object):
       ``<name>_<key>`` (``step_coord``, …) + a ``_roles`` map, one self-contained
       part per name.
 
-    ``modality=`` / ``modalities=`` are DEPRECATED aliases for ``part=`` / ``parts=``.
-
     Extracted numpy arrays are converted to torch tensors automatically.
     This enables zero-copy IPC when used with ``DataLoader(num_workers>0)``
     — PyTorch transfers tensors via file-descriptor sharing (~400 bytes)
@@ -222,13 +220,22 @@ class Collect(object):
     """
 
     def __init__(self, keys=None, offset_keys_dict=None, part=None, parts=None,
-                 modality=None, modalities=None, **kwargs):
-        # `part=`/`parts=` are the canonical names — the batch unit is a *part*: an
-        # offset-bearing key group (a modality, an SSL view, a graph store, a second
-        # row-space), matching the `_roles`/`Apply(on=)` vocabulary.
-        # `modality=`/`modalities=` are DEPRECATED aliases (still accepted).
-        parts = modalities if parts is None else parts
-        part = modality if part is None else part
+                 **kwargs):
+        # `part=`/`parts=` are the ONLY names. The batch unit is a *part*: an
+        # offset-bearing key group (a modality, an SSL view, a graph store, a
+        # second row-space), matching the `_roles`/`Apply(on=)` vocabulary.
+        #
+        # `modality=`/`modalities=` were accepted as aliases. They are not, now:
+        # `modalities=` is ALSO a live dataset-constructor argument with a
+        # different meaning (which modalities to READ), so the same word named
+        # two things one config level apart. **kwargs would swallow them
+        # silently, so reject them by name.
+        for _dead, _use in (("modality", "part"), ("modalities", "parts")):
+            if _dead in kwargs:
+                raise TypeError(
+                    f"Collect({_dead}=...) was removed; use {_use}=. "
+                    f"(`modalities=` on a DATASET is unrelated and unchanged — "
+                    f"it selects which modalities to read.)")
         # Two forms (mutually exclusive):
         #  * single  — keys=/part=/feat *_keys → a flat (bare) dict, scoped to
         #    data_dict[part] (or the top level). Byte-identical to before.

@@ -25,15 +25,18 @@ def test_rejects_both_forms():
         Collect(keys=['coord'], parts={'step': dict(keys=['coord'])})
 
 
-def test_deprecated_aliases_still_work():
-    """modalities=/modality= are deprecated aliases for parts=/part=."""
-    import numpy as np
-    # multi: modalities= aliases parts=
-    a = Collect(parts={'step': dict(keys=('coord',))})
-    b = Collect(modalities={'step': dict(keys=('coord',))})
-    assert a.parts_spec == b.parts_spec
-    # single: modality= aliases part=, and produces the same bare output
-    data = {'step': {'coord': np.zeros((3, 3), np.float32)}, 'name': 'e', 'split': 't'}
-    out_new = Collect(part='step', keys=['coord'])(dict(step=data['step'], name='e', split='t'))
-    out_old = Collect(modality='step', keys=['coord'])(dict(step=data['step'], name='e', split='t'))
-    assert set(out_new) == set(out_old) == {'coord', 'offset', 'name', 'split'}
+def test_the_removed_aliases_are_rejected_by_name():
+    """`modality=`/`modalities=` on Collect are gone, and must not fall into **kwargs.
+
+    They are worth rejecting BY NAME rather than just deleting: `modalities=` is
+    still a live argument one config level up, on the dataset constructor, where
+    it means something different (which modalities to READ). The same word named
+    two things, and Collect's `**kwargs` would have swallowed a misplaced one
+    without a word — silently collecting nothing.
+    """
+    import pytest
+    for dead, use in (("modality", "part"), ("modalities", "parts")):
+        with pytest.raises(TypeError) as ei:
+            Collect(**{dead: 'step'})
+        assert f"use {use}=" in str(ei.value), str(ei.value)
+        assert "DATASET is unrelated" in str(ei.value)

@@ -75,7 +75,7 @@ def test_setup_graph_then_subsample_remaps_edges():
     d = {'step': {'coord': rng.standard_normal((30, 3)).astype('float32') * 5}}
     out = Compose([
         dict(type='SetupGraph', on='step', k=3),
-        dict(type='ApplyToModality', modality='step', transforms=[
+        dict(type='Apply', on='step', transforms=[
             dict(type='GridSample', grid_size=1.0, mode='train')]),
     ])(d)
     sub = out['step']

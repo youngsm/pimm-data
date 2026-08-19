@@ -71,8 +71,12 @@ def collate_fn(batch, mix_prob=0):
     if not isinstance(batch, Sequence):
         raise TypeError(f"{batch.dtype} is not supported.")
 
-    # Roles-aware flat-prefixed path (REDESIGN): a sample carrying `_roles` is
-    # collated by role. No `_roles` -> the legacy path below, byte-identical.
+    # Two LIVE paths, not one live and one legacy. A sample carrying `_roles`
+    # comes from `Collect` (which always stamps it) and is collated by role;
+    # everything else — raw-sensor SSL recipes and any pipeline that does not end
+    # in `Collect` — falls through to the generic collate below. That branch was
+    # commented as "legacy"; making it raise showed 13 tests reach it, so the
+    # label was wrong in the direction that invites deletion.
     if isinstance(batch[0], Mapping) and '_roles' in batch[0]:
         return collate_with_roles(batch)
 

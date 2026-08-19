@@ -55,10 +55,10 @@ def test_missing_part_skipped_unless_required():
 
 
 def test_single_part_apply_back_compat():
-    """ApplyToModality is a back-compat single-part Apply."""
+    """Apply is a back-compat single-part Apply."""
     np.random.seed(0)
     d = {'step': {'coord': np.ones((2, 3), np.float32) * 3}}
-    out = TRANSFORMS.build(dict(type='ApplyToModality', modality='step',
+    out = TRANSFORMS.build(dict(type='Apply', on='step',
         transforms=[dict(type='NormalizeCoord')]))(d)
     assert 'step' in out
 

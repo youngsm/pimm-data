@@ -266,7 +266,3 @@ class ShardEventDataset(Dataset):
                 except Exception:
                     pass
 
-
-#: Back-compat alias for the pre-consolidation name (internal; only
-#: jaxtpc.py / lucid.py imported it).
-_MultiModalShardDataset = ShardEventDataset

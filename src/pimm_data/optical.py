@@ -36,7 +36,7 @@ Canonical pipeline (note the second offset + per-chunk ``length`` to recover
 chunk boundaries in the packed ``adc``)::
 
     OpticalDataset(data_root=..., dataset_name='...', schema='label',
-      transform=[dict(type='Collect', modalities={
+      transform=[dict(type='Collect', parts={
           'sensor': dict(
               keys=('pmt_id', 't0_ns', 'length', 'pe', 'instance', 'adc'),
               feat_keys=('pe',),

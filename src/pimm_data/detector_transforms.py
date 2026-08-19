@@ -14,14 +14,14 @@ class indices before loss. Works for any int-valued segment column
 ``Densify`` / ``AddNoise`` / ``Digitize``: the dense sensor-modality chain. The
 full forward path mirrors production ``make_noisy``::
 
-    ApplyToModality(modality='sensor', transforms=[
+    Apply(on='sensor', transforms=[
         dict(type='Densify'),    # sparse COO -> dense (n_wires, n_ticks)
         dict(type='AddNoise'),   # img += generate_noise(...)  (incoherent/coherent)
         dict(type='Digitize'),   # round(img+pedestal).clip(0, adc_max) - pedestal
     ])
 
 All three operate on the ``sensor`` sub-dict — wrap them in
-``ApplyToModality(modality='sensor', transforms=[...])``.
+``Apply(on='sensor', transforms=[...])``.
 """
 
 import copy
@@ -92,14 +92,6 @@ class Apply:
                 np.random.set_state(state)
             data_dict[m] = self.inner(data_dict[m])
         return data_dict
-
-
-@TRANSFORMS.register_module()
-class ApplyToModality(Apply):
-    """Back-compat alias: single-part :class:`Apply`. Prefer ``Apply(on=…)``."""
-
-    def __init__(self, modality, transforms=None, required=False):
-        super().__init__(on=modality, transforms=transforms, required=required)
 
 
 def _knn_edges(coord, k):
@@ -226,7 +218,7 @@ class MultiCrop:
     ``local_transform`` run on each crop with independent draws. Local crop centers
     are sampled WITHIN the major global crop (co-location).
 
-    Collect the resulting parts (``Collect(modalities={'global': dict(keys=('coord',
+    Collect the resulting parts (``Collect(parts={'global': dict(keys=('coord',
     'offset'), offset_keys_dict={}, feat_keys=…), 'local': …})``) to flat
     ``global_*``/``local_*``; collate's offset cumsum then packs ``B*num`` crops. The
     per-crop ``offset`` is carried through (``offset_keys_dict={}`` suppresses the
@@ -472,7 +464,7 @@ class AggregateSensorHits:
         # TOP level and drop the sub-dict (the old event-SSL flat flow).
         # flatten=False keeps it NESTED in the modality sub-dict, which the new
         # flat-prefixed flow needs (Apply(on=) / MultiCrop(on=) /
-        # Collect(modalities=) all read a sub-dict).
+        # Collect(parts=) all read a sub-dict).
         self.flatten = flatten
 
     def __call__(self, data_dict):
@@ -531,7 +523,7 @@ class Densify:
     """Scatter sparse COO sensor planes into dense ``(n_wires, n_ticks)`` images.
 
     Operates on a ``sensor`` sub-dict (wrap in
-    ``ApplyToModality(modality='sensor', ...)``). Reads ``sub['raw'][label]``
+    ``Apply(on='sensor', ...)``). Reads ``sub['raw'][label]``
     (``{'wire', 'time', 'value'}``, already absolute indices + pedestal-
     subtracted by the reader) and the per-plane grid extent from
     ``sub['shape'][label] = (n_wires, n_ticks)``. Writes

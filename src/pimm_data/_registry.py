@@ -6,9 +6,7 @@ does not depend on pimm. Compatible interface for configs that contain
 """
 
 import inspect
-import warnings
 from collections import abc
-from functools import partial
 
 
 def _is_seq_of(seq, expected_type, seq_type=None):
@@ -173,20 +171,20 @@ class Registry:
                 raise KeyError(f"{name} is already registered in {self.name}")
             self._module_dict[name] = module_class
 
-    def deprecated_register_module(self, cls=None, force=False):
-        warnings.warn(
-            "The old register_module(module, force=False) API is deprecated; "
-            "use register_module(name=None, force=False, module=None).")
-        if cls is None:
-            return partial(self.deprecated_register_module, force=force)
-        self._register_module(cls, force=force)
-        return cls
-
     def register_module(self, name=None, force=False, module=None):
         if not isinstance(force, bool):
             raise TypeError(f"force must be a boolean, got {type(force)}")
         if isinstance(name, type):
-            return self.deprecated_register_module(name, force=force)
+            # mmcv's pre-1.0 form, `register_module(SomeClass)`. It was vendored
+            # in with a DeprecationWarning and never used here — no call site in
+            # this repo passes a class positionally. Rejected outright rather
+            # than silently accepted, so the one supported spelling is the one
+            # in every config.
+            raise TypeError(
+                f"register_module() got the class {name.__name__} as its first "
+                f"positional argument. The signature is "
+                f"register_module(name=None, force=False, module=None); "
+                f"decorate with @{self.name.upper()}.register_module() instead.")
 
         if not (name is None or isinstance(name, str) or _is_seq_of(name, str)):
             raise TypeError(
