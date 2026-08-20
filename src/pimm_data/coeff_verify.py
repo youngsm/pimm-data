@@ -31,7 +31,7 @@ import h5py
 
 
 def verify_corpus(data_root, dataset_name, *, split="", expect_events=None,
-                  modalities=("coeff", "coeff_clean")):
+                  modalities=("coeff", "coeff_clean"), source_root=None):
     """Check a built corpus for cross-shard problems. Returns a list of problem
     strings (empty == clean). Does not open the dataset; pure file inspection, so
     it works on a partially built corpus too."""
@@ -59,11 +59,30 @@ def verify_corpus(data_root, dataset_name, *, split="", expect_events=None,
             probs.append(f"coeff_clean shards with no coeff pair: {sorted(c_idx - n_idx)}")
 
     # --- 2. file_index contiguity --------------------------------------------
+    # A gap usually means a build job died. It can also mean the SOURCE file was
+    # never there: run_0027670361 upstream has 90 files, not 100, so shards
+    # 51-56 and 94-97 can never exist and the corpus is complete without them.
+    # Those two cases look identical from inside the corpus, and the difference
+    # is one directory away — so `source_root` is asked for the evidence rather
+    # than a flag being offered to silence the check. With it, a gap whose source
+    # is ABSENT is fine and a gap whose source EXISTS is still an error, which is
+    # a strictly stronger check than the unconditional one it replaces.
     have = sorted(idx_of(p) for p in noisy)
     missing = sorted(set(range(have[0], have[-1] + 1)) - set(have))
+    if missing and source_root:
+        src_dir = os.path.join(source_root, split) if split else source_root
+        recoverable = [i for i in missing if os.path.exists(
+            os.path.join(src_dir, f"{dataset_name}_sensor_{i:04d}.h5"))]
+        upstream = [i for i in missing if i not in recoverable]
+        if upstream:
+            print(f"  note: shards {upstream} have no source under {src_dir} — "
+                  f"absent upstream, not a failed build")
+        missing = recoverable
     if missing:
         probs.append(f"file_index gap — shards {missing} absent between "
-                     f"{have[0]} and {have[-1]} (a failed job leaves exactly this)")
+                     f"{have[0]} and {have[-1]} (a failed job leaves exactly this"
+                     + ("; pass --source-root to distinguish an upstream gap)"
+                        if not source_root else ", and the source file IS present)"))
 
     # --- 3. cross-shard agreement + identity uniqueness ----------------------
     ref = None
@@ -204,9 +223,14 @@ def main(argv=None):
     ap.add_argument("--expect", type=int, default=None,
                     help="expected total event count across the corpus")
     ap.add_argument("--modalities", nargs="*", default=["coeff", "coeff_clean"])
+    ap.add_argument("--source-root", default=None,
+                    help="the SENSOR tree the corpus was built from. Given, a "
+                         "file_index gap is judged against it: absent upstream "
+                         "is fine, present-but-unbuilt is still an error.")
     a = ap.parse_args(argv)
     probs = verify_corpus(a.data_root, a.dataset_name, split=a.split,
-                          expect_events=a.expect, modalities=tuple(a.modalities))
+                          expect_events=a.expect, modalities=tuple(a.modalities),
+                          source_root=a.source_root)
     if probs:
         print(f"CORPUS FAILED ({len(probs)} problem(s)):")
         for p in probs:

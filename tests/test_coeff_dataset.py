@@ -766,3 +766,36 @@ def test_one_gate_across_all_shards_is_accepted(tmp_path):
     _write_pair(tmp_path, [2, 3], file_index=1, seed=2)
     ds = CoeffTPCDataset(data_root=str(tmp_path), dataset_name="cx")
     assert len(ds) == 4
+
+
+def test_a_gap_is_judged_against_the_SOURCE_not_assumed_to_be_a_failed_job(tmp_path):
+    """A missing file_index means a dead build job — or a file that never existed.
+
+    run_0027670361 has 90 source files upstream, not 100, so its corpus is
+    COMPLETE with shards 51-56 and 94-97 absent. From inside the corpus that is
+    indistinguishable from ten crashed jobs, and the difference is one directory
+    away — so the verifier is given the source tree as evidence rather than a
+    flag that would simply silence it. The result is a STRONGER check than the
+    unconditional one: a gap whose source exists is still an error.
+    """
+    from pimm_data.coeff_verify import verify_corpus
+
+    corpus = tmp_path / "corpus"; corpus.mkdir()
+    src = tmp_path / "source"; src.mkdir()
+    for i in (0, 1, 3):                      # shard 2 is missing
+        _write_pair(corpus, [i * 2, i * 2 + 1], file_index=i, seed=i)
+
+    # No source tree: the gap is reported, and the message says how to resolve it.
+    probs = verify_corpus(str(corpus), "cx")
+    assert any("file_index gap" in p for p in probs)
+    assert any("--source-root" in p for p in probs), probs
+
+    # Source for 2 ABSENT -> the corpus is complete.
+    for i in (0, 1, 3):
+        (src / f"cx_sensor_{i:04d}.h5").write_bytes(b"")
+    assert verify_corpus(str(corpus), "cx", source_root=str(src)) == []
+
+    # Source for 2 PRESENT -> still an error, and the message says so.
+    (src / "cx_sensor_0002.h5").write_bytes(b"")
+    probs = verify_corpus(str(corpus), "cx", source_root=str(src))
+    assert any("source file IS present" in p for p in probs), probs
