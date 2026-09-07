@@ -25,7 +25,6 @@ from .collate import collate_fn, point_collate_fn, inseg_collate_fn
 from .jaxtpc import JAXTPCDataset
 from .lucid import LUCiDDataset
 from .optical import OpticalDataset
-from .coeff import CoeffTPCDataset
 from .pilarnet import PILArNetH5Dataset
 from .multimodal import MultiModalEventDataset
 
@@ -42,7 +41,6 @@ from .readers import (
     JAXTPCStepReader, JAXTPCSensorReader, JAXTPCHitsReader, JAXTPCLablReader,
     LUCiDStepReader, LUCiDSensorReader, LUCiDHitsReader, LUCiDLablReader,
     OpticalSensorReader, OpticalEastWestReader,
-    CoeffTPCReader,
 )
 from ._joint_index import build_joint_index
 
@@ -76,7 +74,6 @@ __all__ = [
     "JAXTPCDataset",
     "LUCiDDataset",
     "OpticalDataset",
-    "CoeffTPCDataset",
     "PILArNetH5Dataset",
     "MultiModalEventDataset",
     # readers + joint index (torch-free public surface)
@@ -90,7 +87,6 @@ __all__ = [
     "LUCiDLablReader",
     "OpticalSensorReader",
     "OpticalEastWestReader",
-    "CoeffTPCReader",
     "build_joint_index",
     # post-collate dense transforms (run via Compose; no batch-transform runner)
     "sensor_dense_cfg",
