@@ -44,6 +44,16 @@ from .readers import (
 )
 from ._joint_index import build_joint_index
 
+# Extension surface for OUT-OF-TREE detector families (helix's coeff corpus is
+# the first). These were reachable only as underscore modules, so an external
+# family had to import pimm_data._dataset_base / ._shard_meta / .readers._base --
+# a private seam with no declared dependency and no test crossing it. Exporting
+# them makes the contract explicit: THIS is what a family may subclass, and
+# breaking it is a breaking change rather than someone else's problem.
+from ._shard_meta import read_shard_meta
+from .readers._base import ShardReaderBase
+from ._dataset_base import ShardEventDataset
+
 # Plane-geometry registry (loaded from a JAXTPC-exported config JSON)
 from .geometry import load_plane_registry, dataset_geometry_kwargs
 
@@ -100,6 +110,9 @@ __all__ = [
     # flat-prefixed batch boundary helpers (REDESIGN)
     "to_batched_coords",
     "split_event",
+    "ShardEventDataset",
+    "ShardReaderBase",
+    "read_shard_meta",
 ]
 
 __version__ = "0.3.0"
