@@ -62,13 +62,9 @@ from .batch_ops import to_batched_coords, split_event
 
 # Post-collate, on-device batch transforms (the dense GPU path runner)
 from . import dense_ops  # noqa: F401
+from . import dense_ops_jax  # noqa: F401  (going to dense, jax path)
 from .batch_transforms import (
-    sensor_dense_cfg,
-    build_sensor_gpu_stages,
-    move_to_device,
-    content_seed,
-    ToDevice,
-    BatchTransformMixin,
+    move_to_device, content_seed, ToDevice, BatchTransformMixin,
 )
 
 __all__ = [
@@ -99,8 +95,6 @@ __all__ = [
     "OpticalEastWestReader",
     "build_joint_index",
     # post-collate dense transforms (run via Compose; no batch-transform runner)
-    "sensor_dense_cfg",
-    "build_sensor_gpu_stages",
     "move_to_device",
     "content_seed",
     "ToDevice",

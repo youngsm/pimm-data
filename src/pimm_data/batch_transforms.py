@@ -34,9 +34,6 @@ import torch
 
 from . import dense_ops
 from .transform import TRANSFORMS
-from .noise import (DEFAULT_ENC, DEFAULT_SAMPLING_RATE_HZ, DEFAULT_GROUP_SIZE,
-                    DEFAULT_COH_RMS_ADC, DEFAULT_COH_CORNER_FREQ_HZ,
-                    DEFAULT_COH_SLOPE, DEFAULT_COH_BETA)
 
 
 # ── device move (idempotent) ──────────────────────────────────────────────
@@ -102,49 +99,6 @@ class ToDevice:
 
     def __call__(self, batch):
         return move_to_device(batch, self.device, non_blocking=self.non_blocking)
-
-
-def sensor_dense_cfg(geom, *, modality='sensor', device=None, base_seed=0,
-                     coherent=True, incoherent=False, digitize=True, n_bits=12,
-                     dense_key=None, **noise_kw):
-    """The standard dense sensor chain as plain ``dict(type=…)`` configs:
-    ``[ToDevice?, Densify, AddNoise, Digitize?]``.
-
-    Run it with the ordinary ``Compose`` (these are ``scope='sample'`` transforms —
-    there is **no batch-transform runner**): ``Compose([*sensor_dense_cfg(geom,
-    device='cuda'), my_user_gpu_fn])(batch)``. Noise self-seeds from ``batch['name']``
-    (``base_seed`` here; epoch/rank from optional ``batch['_epoch']``/``_rank``).
-
-    Densify is opt-in and additive (the sparse COO is never replaced). ``modality=
-    'sensor'`` writes flat ``sensor_dense``; ``modality=None`` writes bare ``dense``.
-    """
-    if dense_key is None:
-        dense_key = 'dense'
-    cfg = []
-    if device is not None:
-        cfg.append(dict(type='ToDevice', device=device))
-    cfg.append(dict(type='Densify', geom=geom, modality=modality,
-                    dense_key=dense_key))
-    cfg.append(dict(type='AddNoise', geom=geom, modality=modality,
-                    base_seed=base_seed, coherent=coherent, incoherent=incoherent,
-                    dense_key=dense_key, **noise_kw))
-    if digitize:
-        cfg.append(dict(type='Digitize', geom=geom, modality=modality,
-                        n_bits=n_bits, dense_key=dense_key))
-    return cfg
-
-
-def build_sensor_gpu_stages(geom, *, modality=None, **kw):
-    """Convenience: the dense sensor chain as a runnable ``Compose``.
-
-    ``stages = build_sensor_gpu_stages(geom, device='cuda'); batch = stages(batch)``.
-    There is no separate batch-transform runner — the dense ops are ordinary
-    ``scope='sample'`` transforms run by ``Compose`` (``ToDevice`` is the device step;
-    noise self-seeds). Default ``modality=None`` (bare-batch); pass ``modality=
-    'sensor'`` for flat ``sensor_*``.
-    """
-    from .transform import Compose
-    return Compose(sensor_dense_cfg(geom, modality=modality, **kw))
 
 
 class BatchTransformMixin:

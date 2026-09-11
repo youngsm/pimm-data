@@ -117,41 +117,6 @@ def test_sensor_consumed_sparse_no_densify(jaxtpc_data_root):
 
 # --- Phase 3: optional densify scoped to a namespaced modality ------------
 
-def test_dense_stage_scoped_to_namespaced_modality(jaxtpc_data_root):
-    """Densify/noise/digitize scoped to a modality → batch['sensor']['dense'] =
-    {plane_gid:(B,W,T)}, born on the runner's device (CPU here, device-agnostic);
-    other modalities untouched. Seeds come from top-level batch['name']."""
-    import torch
-    from pimm_data import collate_fn, build_sensor_gpu_stages
-    wl = {'U': (0.42, 4.63), 'V': (0.42, 4.63), 'Y': (2.33, 2.33)}
-    ds = JAXTPCDataset(
-        data_root=jaxtpc_data_root, split='', dataset_name='sim',
-        modalities=('step', 'sensor'), labels='pdg', min_deposits=0, max_len=2,
-        wire_lengths_per_plane=wl,
-        transform=[dict(type='Collect', parts={
-            'step':   dict(keys=('coord', 'segment'), feat_keys=('coord', 'energy')),
-            'sensor': dict(keys=('wire', 'time', 'value', 'plane_gid')),
-        })])
-    ds.get_data(0)                       # populate reader geometry
-    geom = ds.plane_geometry()
-    batch = collate_fn([ds[0], ds[1]])
-    step_coord = batch['step_coord'].clone()
-
-    # build_sensor_gpu_stages returns a runnable Compose (ToDevice + dense ops);
-    # no separate runner. Noise self-seeds from batch['name'].
-    stages = build_sensor_gpu_stages(geom, modality='sensor', device='cpu',
-                                     coherent=True, incoherent=False, digitize=True)
-    out = stages(batch)
-
-    grids = out['sensor_dense']                             # born at sensor_dense (flat)
-    assert isinstance(grids, dict) and len(grids) >= 1
-    for g in grids.values():
-        assert g.ndim == 3 and g.shape[0] == 2              # (B, W, T)
-    assert 'step_dense' not in out and torch.equal(out['step_coord'], step_coord)
-
-
-# --- Phase 5: codec transcode must preserve the holdout identity (F1) -----
-
 def test_transcode_preserves_identity_attrs(jaxtpc_data_root, tmp_path):
     """Re-codec'ing a shard must preserve the 3-tuple identity inputs
     (source_event_idx / global_event_offset / file_index) — otherwise the

@@ -105,34 +105,3 @@ def test_optical_eastwest_recipe(optical_eastwest_data_root):
     assert set(np.unique(b['sensor_instance'].numpy()).tolist()) <= {0, 1}
 
 
-def test_jaxtpc_sensor_dense_gpu_recipe(jaxtpc_data_root):
-    """One transform list, split at Collect: the head Collects sparse sensor COO
-    per-event; the dataset exposes the post-collate tail as batch_transform
-    ([ToDevice, Densify, AddNoise, Digitize]). Running the tail (synthetic geom,
-    CPU) densifies+noises+digitizes -> sensor_dense {plane_gid: (B, W, T)}."""
-    from pimm_data.transform import Compose
-    from pimm_data._dataset_base import ShardEventDataset
-    ns = runpy.run_path(os.path.join(_CONFIGS, 'jaxtpc/sensor_dense_gpu.py'))
-    spec = dict(copy.deepcopy(ns['data']['train']))
-    spec.update(data_root=jaxtpc_data_root, split='', dataset_name='sim')
-    ds = build_dataset(spec)
-    assert ds.batch_transform is not None            # tail split off at Collect
-    ds.get_data(0)                                   # populate reader geometry
-    geom = ds.plane_geometry()
-    batch = collate_fn([ds[0], ds[1]])               # head -> sparse sensor_*
-    assert {'sensor_wire', 'sensor_time', 'sensor_value', 'sensor_plane_gid',
-            'sensor_offset'} <= {k for k in batch if k != '_roles'}
-    # the recipe's post-collate tail, run with the SYNTHETIC geom + on CPU
-    _, tail = ShardEventDataset._split_at_collect(ns['transform'])
-    assert [t['type'] for t in tail] == ['ToDevice', 'Densify', 'AddNoise', 'Digitize']
-    tail = copy.deepcopy(tail)
-    for t in tail:
-        if 'geom' in t:
-            t['geom'] = geom
-        if t['type'] == 'ToDevice':
-            t['device'] = 'cpu'
-    out = Compose(tail)(batch)
-    grids = out['sensor_dense']
-    assert isinstance(grids, dict) and len(grids) >= 1
-    for g in grids.values():
-        assert g.ndim == 3 and g.shape[0] == 2       # (B, n_wires, n_ticks)

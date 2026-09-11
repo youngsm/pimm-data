@@ -1,4 +1,10 @@
-"""Guard the dense-op twin collapse: the post-collate torch core
+"""Densify's numpy oracle.
+
+test_digitize_oracle_equiv left with the forward model: dense_ops.digitize is
+helix's now, and the test moved there restated as the formula rather than as a
+cross-boundary oracle import. What remains is the scatter, which is a data-layer
+operation and stays.
+Guard the dense-op twin collapse: the post-collate torch core
 (:mod:`pimm_data.dense_ops`) must reproduce the pre-collate numpy transforms
 bit-for-bit on a single event BEFORE the numpy twins are deleted. This witnesses
 that the collapse is lossless — densify is one scope='sample' op, placed by the
@@ -9,7 +15,6 @@ import torch
 
 from pimm_data import dense_ops
 from pimm_data.detector_transforms import Densify
-from pimm_data.noise import digitize as digitize_np
 
 
 def _synthetic_plane(W, T, n, seed):
@@ -43,16 +48,3 @@ def test_densify_oracle_equiv_single_event():
 
     assert torch_grid.shape == np_grid.shape == (W, T)
     assert np.array_equal(torch_grid, np_grid)
-
-
-def test_digitize_oracle_equiv():
-    """dense_ops.digitize == noise.digitize (the oracle numpy Digitize calls)."""
-    W, T, gid, ped = 11, 17, 0, 400.0
-    rng = np.random.default_rng(2)
-    g = (rng.standard_normal((W, T)) * 50).astype(np.float32)
-
-    np_out = digitize_np(g, ped, n_bits=12, gain=1.0)
-    torch_out = dense_ops.digitize(
-        {gid: torch.from_numpy(g)}, ped, n_bits=12, gain=1.0)[gid].numpy()
-
-    assert np.array_equal(torch_out, np_out)

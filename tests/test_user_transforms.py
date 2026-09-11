@@ -14,7 +14,7 @@ import torch
 
 from pimm_data.transform import Compose
 from pimm_data.batch_transforms import ToDevice
-from pimm_data.detector_transforms import Densify, AddNoise, Digitize
+from pimm_data.detector_transforms import Densify
 
 
 def test_precollate_bare_callable():
@@ -41,15 +41,6 @@ def test_postcollate_bare_callable_in_compose():
     out = Compose([dict(type='ToDevice', device='cpu'), gpu_scale])(batch)
     assert out['feat'].device == torch.device('cpu')
     assert torch.equal(out['feat'], torch.full((4, 2), 2.0))
-
-
-def test_dense_ops_are_scope_sample_and_compose():
-    """densify/noise/digitize are scope='sample' (per-single) -> run in a plain
-    Compose alongside ToDevice (the fence does NOT block them)."""
-    for cls in (ToDevice, Densify, AddNoise, Digitize):
-        assert getattr(cls, 'scope', None) == 'sample'
-    Compose([dict(type='ToDevice', device='cpu'),
-             dict(type='Densify', geom={}, modality='sensor')])   # no fence error
 
 
 def test_compose_rejects_genuine_scope_batch():
