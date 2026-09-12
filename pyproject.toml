@@ -1,6 +1,9 @@
 [project]
 name = "pimm-data"
-version = "0.3.0"
+# Read from src/pimm_data/__init__.py rather than duplicated here. The two
+# sat at 0.3.0 in BOTH files with nothing keeping them equal; helix hit
+# exactly this drift (0.1.0 vs 0.2.0) and it was not cosmetic there.
+dynamic = ["version"]
 description = "Multimodal detector dataset loaders (LArTPC, Water Cherenkov) for particle-imaging ML workflows."
 requires-python = ">=3.10"
 dependencies = [
@@ -19,15 +22,22 @@ test = ["pytest"]
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.dynamic]
+version = {attr = "pimm_data.__version__"}
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# Data the code loads by default: the plane-geometry registry and the measured
-# noise spectrum (pimm_data.noise.DEFAULT_SERIES_SPECTRUM). Without this they are
-# missing from a built wheel — an editable install hides it because the files are
-# simply present on disk.
+# Data the code loads by default: the plane-geometry registry that
+# geometry.load_plane_registry falls back to. Without this it is missing from a
+# built wheel — an editable install hides it because the file is simply present
+# on disk.
+#
+# noise_spectrum.npz was dropped with the forward model: its only loader was
+# pimm_data.noise.DEFAULT_SERIES_SPECTRUM, which is helix's now. helix ships the
+# byte-identical file as helix/tpc/data/noise_spectrum.npz.
 [tool.setuptools.package-data]
-"pimm_data" = ["data/*.json", "data/*.npz"]
+"pimm_data" = ["data/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

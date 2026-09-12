@@ -4,11 +4,16 @@ from the detector config (the geometry source of truth); pimm-data reads the pla
 JSON — **no JAXTPC dependency**.
 
     geom = load_plane_registry("cubic_wireplane_geometry.json")   # ships in data/
-    stages = build_sensor_gpu_stages(geom, coherent=True, incoherent=True)
+    dict(type='Densify', geom=geom, modality='sensor')
 
 The registry is keyed by canonical plane id (matching the per-point ``plane_gid``
 the sensor reader surfaces), with per-plane ``n_wires``/``n_ticks``/``pedestal``/
-``wire_lengths`` (meters) — exactly what densify / add_intrinsic_noise / digitize need.
+``wire_lengths`` (meters) — what densify needs to size each plane's grid.
+
+The bundled JSON is a convenience default, not a commitment: ``_resolve`` takes
+any path and only falls back to ``data/``. A consumer with its own detector
+passes its own export. ``add_intrinsic_noise`` and ``digitize`` used to be named
+here; they are helix's forward model now and read the same registry from there.
 """
 
 import json
