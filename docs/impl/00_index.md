@@ -1,5 +1,14 @@
 # Part 00 — Index, overview & build sequencing
 
+> **Boundary note (2026-09-13).** Where this document places the LArTPC forward
+> model — `AddNoise`, `Digitize`, the noise spectrum, `add_intrinsic_noise` — in
+> pimm-data, that is no longer true. Those moved to **helix** (pimm-data
+> `b592600` / helix `8075a53`): pimm-data keeps `densify`, which every detector
+> family needs, and gave up the physics only one family applies. The transform
+> registry raises on duplicate registration, so the two packages are lockstep.
+> See helix `docs/ARCHITECTURE.md` §3. The design reasoning below is kept as
+> written; only the ownership changed.
+
 **Status:** navigational entry point for the pimm-data data-layer build. Read this
 first. It maps the per-part specs, gives the dependency graph and build order,
 pins the cross-part contracts that must not drift, traces decisions to parts, and

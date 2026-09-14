@@ -327,7 +327,7 @@ for empty `min`/`max` voxels; `RelativeLogNormalize` non-idempotent ordering.
 - **`AggregateBySensor` (D32):** registered transform on `hits` (sum PE / min-or-pe-
   weighted t); built-but-unused until a PMT-merged-input task appears.
 - **Track B — densify + noise (D1):** wire-TPC-only; lives on the JAXTPC track
-  (`gpu_batch_transforms_plan.md`); sequenced after the base + readers land.
+  (`gpu_batch_transforms_plan.md`, retired 2026-09-13); sequenced after the base + readers land.
 - **Per-interaction event unit (D36):** opt-in split mode for GENIE/pile-up;
   `per_interaction` already surfaced (§3.4) so it's additive.
 

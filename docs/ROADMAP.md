@@ -1,5 +1,14 @@
 # pimm-data data layer — Implementation Roadmap
 
+> **Boundary note (2026-09-13).** Where this document places the LArTPC forward
+> model — `AddNoise`, `Digitize`, the noise spectrum, `add_intrinsic_noise` — in
+> pimm-data, that is no longer true. Those moved to **helix** (pimm-data
+> `b592600` / helix `8075a53`): pimm-data keeps `densify`, which every detector
+> family needs, and gave up the physics only one family applies. The transform
+> registry raises on duplicate registration, so the two packages are lockstep.
+> See helix `docs/ARCHITECTURE.md` §3. The design reasoning below is kept as
+> written; only the ownership changed.
+
 **Status:** the single execution-and-sign-off document for the pimm-data data-layer
 consolidation. It sequences three bodies of work into one ordered plan: a
 **correctness/desync bug fix (Phase A)** that lands first, the **de-fork build
@@ -37,7 +46,7 @@ the decision log on a *structural* choice, the decision log wins (D34).
 | `impl/06_defork_rollout_packaging.md` | **De-fork runbook** | Steps 0–5 file-by-file actions, per-step gate + rollback, the exact `pimm/datasets/__init__.py` shim, config migration Ra, packaging, pilarnet Rb merge. (D5, D17, D18, D23-future, D32, D33) |
 | `impl/07_test_matrix_fixtures.md` | **Gates / fixtures** | The Step-0 parity/determinism harness, `testing.py` fixture extensions (P07-FIX), the consolidated test matrix (TR/DS/RD/LD/CE/MG), and the gate→step mapping (§6). |
 | `shard_event_filtering_handoff.md` | Phase A bug fix + Phase B/C feature | Verified filtering surface, the cross-modality desync bug (§4), the Phase A/B/C TODO, and the user-owed scope decisions (§6 → D48). |
-| `gpu_batch_transforms_plan.md` / `_handoff.md` | **Track B (out of scope here)** | Densify/AddIntrinsicNoise, wire-TPC-only, deferred (D1/D33). Re-homed here; not part of this roadmap. |
+| `gpu_batch_transforms_plan.md` / `_handoff.md` (RETIRED 2026-09-13) | **Track B (out of scope here)** | Densify/AddIntrinsicNoise, wire-TPC-only, deferred (D1/D33). Re-homed here; not part of this roadmap. |
 
 ---
 

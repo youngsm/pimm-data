@@ -3,8 +3,8 @@
 Status: **living document, v2** (rewritten after the Round-4 4-agent cadence
 review). Append-only **decision log (Part VIII)** is the spine of truth: D1–D22
 verbatim from v1; D23–D33 added by the review; superseded rows annotated, never
-deleted. Companions: `gpu_batch_transforms_plan.md` (Track B / wire-TPC),
-`gpu_batch_transforms_handoff.md` (neutral facts).
+deleted. Companions: `gpu_batch_transforms_plan.md` and `_handoff.md` — both retired
+2026-09-13; the forward model they place in pimm-data is helix's now.
 
 Repos / data:
 - `pimm-data`: `/sdf/group/neutrino/omara/pimm-data`
@@ -72,7 +72,7 @@ when/where post-collate stages run + RNG.
 
 **Track B (densify + noise) is wire-TPC-only and re-homed to the JAXTPC track**
 (D1, D33); it is NOT part of the LUCiD/WAND path and is sequenced after the base
-+ collate land. The `gpu_batch_transforms_plan.md` v3 "near-term consumer"
++ collate land. The (retired) `gpu_batch_transforms_plan.md` v3 "near-term consumer"
 framing predates D1 and is superseded for LUCiD.
 
 ---

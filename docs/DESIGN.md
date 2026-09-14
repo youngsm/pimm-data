@@ -1,5 +1,14 @@
 # pimm-data data layer — Design & Decisions (authoritative)
 
+> **Boundary note (2026-09-13).** Where this document places the LArTPC forward
+> model — `AddNoise`, `Digitize`, the noise spectrum, `add_intrinsic_noise` — in
+> pimm-data, that is no longer true. Those moved to **helix** (pimm-data
+> `b592600` / helix `8075a53`): pimm-data keeps `densify`, which every detector
+> family needs, and gave up the physics only one family applies. The transform
+> registry raises on duplicate registration, so the two packages are lockstep.
+> See helix `docs/ARCHITECTURE.md` §3. The design reasoning below is kept as
+> written; only the ownership changed.
+
 Status: **live design**, canonical "what & why" for the pimm-data data layer. This
 consolidates the engagement record (decision log D1–D48) and the implementation
 series (`implementation_plan_pimm_data_datalayer.md` + `impl/00..07`) into one
@@ -362,7 +371,7 @@ rewrite. **Four seams are locked now:**
 Flips to build-now only if a concrete multi-stream model is committed this cycle.
 
 **Track B — densify + noise (D1/D33).** Wire-TPC-only; re-homed to the JAXTPC track
-(`gpu_batch_transforms_plan.md`), sequenced after the base + readers land. NOT part of the
+(`gpu_batch_transforms_plan.md`, retired 2026-09-13), sequenced after the base + readers land. NOT part of the
 LUCiD/WAND path. Two decoupled, device-agnostic stages: `Densify` (sparse→dense scatter,
 per-plane, CPU=GPU code) and a separate sensor-only noise step faithful to JAXTPC
 `tools/noise.py`. Stored sensor is signal-only; nothing is converted between `sensor` and

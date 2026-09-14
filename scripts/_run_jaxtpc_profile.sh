@@ -5,7 +5,8 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 
-OUT=/sdf/home/o/omara/neutrino_data/omara/doraemon/profiling
+# Was a hardcoded path under one developer's home that no longer exists.
+OUT=${PROFILE_OUT:-${SCRATCH:-/tmp}/jaxtpc_profiling}
 mkdir -p "$OUT"
 
 echo "############ profile_scaling (FS vs IPC ceiling) ############"

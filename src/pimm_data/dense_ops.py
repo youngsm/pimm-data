@@ -33,10 +33,18 @@ import torch
 # decorrelate the per-component torch RNG streams from each other (and so a
 # numpy-coherent run and a torch-coherent run never share a draw). Masked to 63
 # bits so they don't fight the 63-bit seed mask in manual_seed.
-_INCOH_SEED_SALT = 0x9E3779B97F4A7C15 & ((1 << 63) - 1)
-_COH_SEED_SALT = 0xD1B54A32D192ED03 & ((1 << 63) - 1)
+# The incoherent/coherent seed salts moved to helix with the forward model that
+# derives noise from them (helix/tpc/dense_ops.py). They had zero references
+# here after the move, and a dead copy of a constant that DETERMINES A NOISE
+# REALISATION is the kind of thing that gets picked up years later and quietly
+# disagrees with the live one.
 
 
+# NOTE: helix/tpc/dense_ops.py carries an identical copy. That duplication is
+# FORCED, not accidental: helix.tpc must import with no pimm_data present (see
+# helix docs/ARCHITECTURE.md section 1), so it cannot import this one, and
+# pimm-data's densify needs it independently. helix pins the two together in
+# tests/test_cross_repo_duplication.py, which may import both.
 def offset2batch(offset):
     """Cumulative ``offset`` (B,) -> per-point batch index (ΣN,).
 

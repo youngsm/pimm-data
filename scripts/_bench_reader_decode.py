@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 """Micro-benchmark: current vs optimized hits decode+merge.
 
@@ -20,7 +21,10 @@ try:  # readable against blosc/zstd/lz4 output too
 except ImportError:
     pass
 
-SRC = '/sdf/home/o/omara/neutrino_data/omara/doraemon/hits/run_0026628550/sim_hits_0054.h5'
+# Was a hardcoded path under one developer's home that no longer exists.
+SRC = os.environ.get('BENCH_SHARD', '')
+if not SRC:
+    raise SystemExit('set BENCH_SHARD=<a hits shard .h5> to run this benchmark')
 
 
 def load_planes(ev='event_136'):

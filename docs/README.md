@@ -53,8 +53,6 @@ straight to the decision log: `engagement_plan_transform_dataset_placement.md`
 | `engagement_plan_transform_dataset_placement.md` **Part VIII** | **DECISION-SPINE** | The immutable, append-only decision log **D1–D48** — the record of record for every structural choice. |
 | `engagement_plan_transform_dataset_placement.md` (rest of file) | PROCESS HISTORY | Round log, process re-scoping, WAND scan, de-fork inventory (Part IX), task→stream→label matrix (Part X). Historical; superseded by the canonical set where they overlap. |
 | `implementation_plan_pimm_data_datalayer.md` | **SUPERSEDED** | The original master build spec (§1 architecture, §2 rollout Steps 0–5, §3 component specs, §6 test matrix). **Being superseded by DESIGN + ROADMAP + impl/0N.** Keep as a detailed back-reference (the impl specs still cite its section numbers); do not extend it — new detail goes in DESIGN/ROADMAP/impl. |
-| `gpu_batch_transforms_plan.md` | SOURCE/ARCHIVE | Track B design (v3): `Densify` + `AddIntrinsicNoise` two-stage, wire-TPC noise. **Now LANDED** as the dense path (one-list split at `Collect` → `dataset.batch_transform`, on-device `Densify`/`AddNoise`/`Digitize`) — see `REDESIGN.md` §16 and `configs/jaxtpc/sensor_dense_gpu.py`. This file is the original design source. |
-| `gpu_batch_transforms_handoff.md` | SOURCE/ARCHIVE | Track B neutral fact base (current transform pipeline, noise model, placement tradeoffs). Companion to the plan above. |
 | `shard_event_filtering_handoff.md` | SOURCE/ARCHIVE | Shard/event filtering + the cross-modality desync bug (D42–D48); Phase A correctness fix + Phase B/C feature spec. Folded into the canonical set as D42–D48; this file is the detailed source. |
 
 **De-fork boundary note:** `DESIGN`/`ROADMAP`/`impl/00–07` are the canonical set
@@ -121,4 +119,8 @@ the real file is `03_readers.md`.
 - **de-fork** — moving the data layer out of the pimm fork into pimm-data, then
   re-exporting via a shim and deleting the vendored copy (impl/06).
 - **Track B** — the deferred, JAXTPC-only train-time densify + noise work
-  (`gpu_batch_transforms_*`); out of scope for the impl set (D1/D33).
+  (the retired `gpu_batch_transforms_*` plans); out of scope for the impl set (D1/D33).
+
+---
+
+**Superseded (2026-09-13).** The GPU/batch-transform plans (`gpu_batch_transforms_*.md`) are retired: the dense path shipped, and the LArTPC forward model they assign to pimm-data now lives in helix (see helix `docs/ARCHITECTURE.md`). pimm-data keeps `densify`. Archived under `$HELIX_ARCHIVE/retirement-backups/pimm-data-docs_2026-09-13/`.
