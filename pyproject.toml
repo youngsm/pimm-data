@@ -11,6 +11,14 @@ dependencies = [
     "h5py",
     "hdf5plugin",  # blosc/zstd/lz4 HDF5 filters — required to read JAXTPC
                    # production output (default codec is blosc-zstd)
+    "scipy",       # transform.py imports scipy{,.ndimage,.interpolate,.stats}
+                   # and scipy.spatial.cKDTree at MODULE scope, and __init__.py
+                   # imports transform — so `import pimm_data` raises
+                   # ModuleNotFoundError without it. It was undeclared and
+                   # worked only by accident: scipy arrives via jax[cpu] in the
+                   # container and via scikit-learn/torch_cluster/torch_sparse
+                   # in pimm-fm's lock. A clean install of this package alone
+                   # produced an unimportable package.
     "torch>=2.5",
                         # editable install must not pull a different CUDA build
 ]
