@@ -32,9 +32,12 @@ readers/ (HDF5 → flat dict)  →  jaxtpc.py / lucid.py (flat → nested)  → 
 1. **Readers** (`readers/{jaxtpc,lucid}_{step,sensor,hits,labl}.py`) — one
    per `(detector, modality)` pair. Each opens a glob of shard files,
    builds an event index, and exposes `read_event(idx) → flat dict`. They
-   share no base class but follow the same protocol.
+   subclass `ShardReaderBase` (`readers/_base.py`), which owns the shard
+   index, `locate()`, and fork-safe lazy opening (it re-opens on a pid
+   change — `PILArNetH5Dataset` is the one reader that does not use it and
+   does not have that guard).
 2. **Datasets** (`jaxtpc.py`, `lucid.py`, `optical.py`, `pilarnet.py`) —
-   subclass `DefaultDataset` (in `defaults.py`, vendored from Pointcept). They
+   subclass `ShardEventDataset` (`_dataset_base.py`). They
    wire together per-modality readers, join `labl` dimension tables onto
    `step`/`hits` point clouds, and emit a **nested** dict keyed by modality
    (`{'step': {...}, 'hits': {...}, 'labl': {...}, 'bridges': {...}}`).
@@ -98,16 +101,22 @@ A single `transform` list is **split at the terminal `Collect`** by
 sparse crosses PCIe); the tail (everything after `Collect`) is
 `dataset.batch_transform`, which a trainer runs **per-batch after collate**
 (e.g. Lightning `on_after_batch_transfer`). `ToDevice(device=…)` opens the
-tail (the device step); then `Densify`/`AddNoise`/`Digitize` (single
-dispatching torch transforms — the `Batch*` variants were deleted) build
-the per-plane grids **on-device**. They take `geom=` (a config-derived
-plane registry via `geometry.load_plane_registry`, since real shards lack
-`n_wires` attrs) and `modality='sensor'`, run `scope='sample'`, and
-dispatch numpy (per-event sub-dict) vs torch (collated batch) on whether
-`<part>_offset` is present. Recipe: `configs/jaxtpc/sensor_dense_gpu.py`;
-bench/verify: `examples/bench_dense.py`. Coherent noise is self-contained
-in pimm-data (`noise.py` numpy oracle + `dense_ops._coherent_torch`;
-`coherent_numpy=True` opts back to the bit-exact oracle).
+tail (the device step); then `Densify` (a single dispatching torch
+transform — the `Batch*` variants were deleted) builds the per-plane grids
+**on-device**. It takes `geom=` (a config-derived plane registry via
+`geometry.load_plane_registry`, since real shards lack `n_wires` attrs) and
+`modality='sensor'`, runs `scope='sample'`, and dispatches numpy (per-event
+sub-dict) vs torch (collated batch) on whether `<part>_offset` is present.
+Recipe: `configs/jaxtpc/sensor_dense_gpu.py`.
+
+**GOING TO DENSE STAYS HERE; THE FORWARD MODEL LEFT.** `AddNoise`, `Digitize`,
+`noise.py`, `noise_jax.py` and the coherent-noise oracle are helix's now
+(`helix.tpc`) — LArTPC physics does not belong in a generic data layer. The
+registration is LOCKSTEP: `_registry.py` raises `KeyError` on a duplicate, so
+a pimm-data predating the move plus a current helix fails to import. Anything
+in this tree still naming those transforms is stale, including
+`examples/bench_dense.py`, which raises `KeyError: AddNoise` and is no longer
+a working verifier.
 
 ### Modality semantics and FK chain
 

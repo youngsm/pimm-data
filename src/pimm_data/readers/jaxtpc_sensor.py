@@ -12,10 +12,19 @@ Handles both old format (planes directly under event) and new format
 (planes under volume_N/ subgroups).
 """
 
+import logging
+
 import numpy as np
 import h5py
 
 from ._jaxtpc_readout import JAXTPCReadoutReader
+
+# This module called log.warning() in an except handler without ever defining
+# `log`, so a shard that failed num_time_steps detection raised NameError from
+# inside the handler meant to survive it -- turning a warning into a crash on
+# exactly the corrupt-input path. Both sibling readers (_base, _jaxtpc_readout)
+# define their own; this one was missed.
+log = logging.getLogger(__name__)
 
 
 class JAXTPCSensorReader(JAXTPCReadoutReader):

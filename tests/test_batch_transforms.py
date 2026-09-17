@@ -41,12 +41,11 @@ def _sensor_batch(root, B=2):
 # densify
 # --------------------------------------------------------------------------
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="no CUDA")
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="no CUDA")
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="no CUDA")
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="no CUDA")
-
-
+# No skipif: this is pure CPU tensor arithmetic. It carried FOUR stacked
+# `skipif(not cuda)` decorators -- left behind when the CUDA tests around it were
+# removed -- and the blank lines between them and the `def` do not detach them,
+# so it was silently skipped on every CPU node, which is every node that runs
+# the suite.
 def test_offset2batch_basic_and_empty():
     # cumulative offsets: sample0=3 hits, sample1=0 (empty), sample2=2
     assert dense_ops.offset2batch(torch.tensor([3, 3, 5])).tolist() == [0, 0, 0, 2, 2]
