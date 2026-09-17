@@ -42,6 +42,48 @@ import h5py
 import numpy as np
 
 
+def _stamp_step_geometry(outdir, dataset_name, n_files, n_volumes, readout_type):
+    """``config/{num_wires, volume_ranges}`` on the JAXTPC step shards.
+
+    Real JAXTPC step shards carry both; this fixture carried neither, so any
+    consumer that reads them could not be exercised without production data.
+    helix's ``scripts/dump_probe_truth.py:240`` reads ``config/volume_ranges``
+    and died with ``KeyError: 'volume_ranges'`` on a fixture-built corpus --
+    which made the fixture useless as a full-pipeline smoke input, exactly where
+    it is worth most: someone receiving the code has no data yet.
+
+    Shapes follow a real shard: ``num_wires`` (n_vol, n_planes) int32 and
+    ``volume_ranges`` (n_vol, 3, 2) float32, each volume's (min, max) along
+    x/y/z, with the volumes tiling x and sharing y/z.
+
+    JAXTPC only. LUCiD's sample builder has no volumes and does not want this.
+    """
+    import h5py
+    import numpy as np
+
+    n_planes = 3 if readout_type == 'wire' else 1
+    num_wires = np.tile(np.array([1969, 1969, 1443][:n_planes], dtype=np.int32),
+                        (n_volumes, 1))
+    half = 2160.0
+    ranges = np.zeros((n_volumes, 3, 2), dtype=np.float32)
+    edges = np.linspace(-half, half, n_volumes + 1, dtype=np.float32)
+    for v in range(n_volumes):
+        ranges[v, 0] = (edges[v], edges[v + 1])
+        ranges[v, 1] = (-half, half)
+        ranges[v, 2] = (-half, half)
+
+    for file_idx in range(n_files):
+        path = os.path.join(outdir, 'step',
+                            f'{dataset_name}_step_{file_idx:04d}.h5')
+        with h5py.File(path, 'a') as f:
+            cfg = f.require_group('config')
+            for name, data in (('num_wires', num_wires),
+                               ('volume_ranges', ranges)):
+                if name in cfg:
+                    del cfg[name]
+                cfg.create_dataset(name, data=data)
+
+
 def _stamp_source_event_idx(outdir, dataset_name, modalities, n_files,
                             n_events, start=0):
     """Add a stable per-event identity to written fixtures.
@@ -121,6 +163,8 @@ def make_jaxtpc_sample(outdir, dataset_name='sim', n_events=2, n_files=1,
                            readout_type)
         _write_jaxtpc_labl(os.path.join(outdir, 'labl',
                                         tag.format(mod='labl')), events)
+
+    _stamp_step_geometry(outdir, dataset_name, n_files, n_volumes, readout_type)
 
     if stamp_source_event_idx:
         _stamp_source_event_idx(outdir, dataset_name,
