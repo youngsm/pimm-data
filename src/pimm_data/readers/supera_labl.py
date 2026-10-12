@@ -22,7 +22,7 @@ Output columns per volume (``labl_v{N}_*``)::
     track_sem         (T,)   raw Supera fragment semantic type
     track_pdg         (T,)   PDG of the fragment's root particle
     track_cluster     (T,)   Supera fragment id
-    track_instance    (T,)   Supera particle instance id
+    track_instance    (T,)   Supera particle instance id (fragment's frag_inst_id)
     track_interaction (T,)   Supera interaction id
     track_ancestor    (T,)   Supera ancestor id
     deposit_to_track  (N_v,) per-step-deposit Geant4 track id
@@ -40,7 +40,7 @@ PARTICLE_COLUMNS = {
     'sem': 'frag_sem_type',
     'pdg': 'pdg',
     'cluster': 'frag_id',
-    'instance': 'inst_id',
+    'instance': 'frag_inst_id',
     'interaction': 'interaction_id',
     'ancestor': 'ancestor_id',
 }
