@@ -51,6 +51,8 @@ from .readers.jaxtpc_step import JAXTPCStepReader
 from .readers.jaxtpc_sensor import JAXTPCSensorReader
 from .readers.jaxtpc_labl import JAXTPCLablReader
 from .readers.jaxtpc_hits import JAXTPCHitsReader
+from .readers.supera_labl import SuperaLablReader
+from .readers._base import EVENT_KEY_FMT
 
 log = logging.getLogger(__name__)
 
@@ -134,6 +136,10 @@ class JAXTPCDataset(ShardEventDataset):
         Whether step reader loads dx, theta, phi, charge, photons, etc.
     label_keys : list or None
         Which label datasets to load from labl files (None → all).
+    supera_root : str or None
+        Read labels from pysupera output under this directory instead of
+        ``labl/`` shards (see :mod:`pimm_data.readers.supera_labl`). Adds a
+        ready-made PILArNet 5-class ``motif`` column: ``labels='motif'``.
     transform : list or None
         Transform pipeline.
     loop, max_len, ignore_index : standard dataset parameters.
@@ -164,6 +170,7 @@ class JAXTPCDataset(ShardEventDataset):
         n_wires_per_plane=None,
         pedestal_per_plane=None,
         wire_lengths_per_plane=None,
+        supera_root=None,
     ):
         self._modalities = tuple(modalities)
         self._validate_modalities(self._modalities)
@@ -259,7 +266,11 @@ class JAXTPCDataset(ShardEventDataset):
                 num_time_steps=num_time_steps,
                 pedestal_per_plane=pedestal_per_plane)
 
-        if self._want_labels:
+        # Label source: labl/ shards, or Supera files when supera_root is set.
+        self.supera_labl_reader = None
+        if self._want_labels and supera_root is not None:
+            self.supera_labl_reader = SuperaLablReader(supera_root)
+        elif self._want_labels:
             self.labl_reader = JAXTPCLablReader(
                 data_root=self._modality_root('labl'), split=split,
                 dataset_name=dataset_name, label_keys=label_keys)
@@ -327,8 +338,8 @@ class JAXTPCDataset(ShardEventDataset):
         }
 
         labl_by_volume = {}
-        if self.labl_reader is not None:
-            labl_by_volume = self._build_labl(self.labl_reader.read_event(real_idx))
+        if self._want_labels:
+            labl_by_volume = self._build_labl(self._read_labl(real_idx))
             if self._volume is not None:
                 # Drop labl volumes the user isn't loading (keeps the
                 # dataset's view consistent with ``volume=`` on other readers).
@@ -514,6 +525,18 @@ class JAXTPCDataset(ShardEventDataset):
         if self._readout_type == 'pixel':
             return ('py', 'pz', 'time')
         return ('wire', 'time')
+
+    def _read_labl(self, idx):
+        """Flat ``labl_v{N}_{col}`` dict for one event, from whichever label
+        source this dataset was built with."""
+        if self.supera_labl_reader is None:
+            return self.labl_reader.read_event(idx)
+        # Supera files are not indexed by the joint index; they follow the
+        # event's JAXTPC shard.
+        reader = self._canonical_reader
+        file_idx, event_num = reader.locate(idx)
+        return self.supera_labl_reader.read_event(
+            reader.h5_files[file_idx], EVENT_KEY_FMT.format(event_num))
 
     def _build_labl(self, labl_flat):
         """Convert flat labl_v{N}_col keys into nested {v{N}: {col: arr}}.
